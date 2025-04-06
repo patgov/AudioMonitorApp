@@ -7,12 +7,9 @@
 
 import SwiftUI
 
-struct AudioMonitorView_Previews: View {
-    var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+struct AudioMonitorView_Previews: PreviewProvider {
+    static var previews: some View {
+        AudioMonitorView()
+            .environmentObject(AudioProcessor())
     }
-}
-
-#Preview {
-    AudioMonitorView_Previews()
 }

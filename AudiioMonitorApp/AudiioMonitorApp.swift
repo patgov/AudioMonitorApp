@@ -1,21 +1,22 @@
-    //
-    //  AudiioMonitorAppApp.swift
-    //  AudiioMonitorApp
-    //
-    //  Created by Pat Govan on 3/30/25.
-    //
-
 import SwiftUI
 
 @main
-struct AudiioMonitorAppApp: App {
-    @StateObject private var processor = AudioProcessor()
+struct AudiioMonitorApp: App {
+    @StateObject private var logManager: LogManager
+    @StateObject private var audioManager: AudioManager
+    
+    init() {
+        let logger = LogManager.shared
+        let processor = AudioProcessor()
+        _logManager = StateObject(wrappedValue: logger)
+        _audioManager = StateObject(wrappedValue: AudioManager(processor: processor, logManager: logger))
+    }
     var body: some Scene {
         WindowGroup {
-        NavigationView {
+           NavigationView {
                 AudioMonitorView()
-                    .environmentObject(processor)
-
+                    .environmentObject(audioManager)
+                    .environmentObject(logManager)
                     .navigationTitle("Audio Monitor")
                     .toolbar {
                         ToolbarItem(placement: .automatic) {
@@ -24,7 +25,7 @@ struct AudiioMonitorAppApp: App {
                             }
                         }
                     }
-            }
+           }
         }
     }
 }

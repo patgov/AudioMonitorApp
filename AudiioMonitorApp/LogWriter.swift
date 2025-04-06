@@ -1,41 +1,35 @@
 import Foundation
 
-    //struct LogEntry: Identifiable {
-    //    let id = UUID()
-    //    let timestamp: Date
-    //    let level: String
-    //    let source: String
-    //    let message: String
-    //}
-
-import Foundation
-
     /// Struct to hold current session statistics
 struct AudioStats {
     var silenceCount: [Int] = [0, 0]   // [Left, Right]
     var overmodulationCount: [Int] = [0, 0]
 }
 
-class LogWriter {
+final class LogWriter:  @unchecked Sendable {
+
     private(set) var logFileURL: URL
     static let shared = LogWriter()
     init() {
         let filename = "AudioMonitorLog.txt"
         let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         logFileURL = directory.appendingPathComponent(filename)
-        
+
         ensureLogFile()
     }
-    
+
     func write(_ message: String, tag: String) {
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let line = "[\(timestamp)] [\(tag)] \(message)\n"
         append(line: line)
+        print("📄 Writing to log file: \(line)")
     }
-    
+
     private func append(line: String) {
-        guard let data = line.data(using: .utf8) else { return }
-        
+        print("📤 Writing log line: \(line)")
+        let lineWithNewline = line + "\n"  // ✅ Add newline so each log entry is a new line
+        guard let data = lineWithNewline.data(using: .utf8) else { return }
+
         if FileManager.default.fileExists(atPath: logFileURL.path) {
             if let handle = try? FileHandle(forWritingTo: logFileURL) {
                 handle.seekToEndOfFile()
@@ -47,28 +41,52 @@ class LogWriter {
         }
     }
 
+
+
     func readStructuredLogs() -> [LogEntry] {
         guard let data = try? String(contentsOf: logFileURL, encoding: .utf8),
-        !data.isEmpty else { return [] }
+              !data.isEmpty else { return [] }
 
         let lines = data.components(separatedBy: .newlines)
         let formatter = ISO8601DateFormatter()
 
-        return lines.compactMap { line in
-            let pattern = #"\[(.*?)\] \[(.*?)\] (.*?): (.*)"#
-            guard let regex = try? NSRegularExpression(pattern: pattern),
-                  let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-                  match.numberOfRanges == 5 else {
-                return nil
-            }
+        var entries: [LogEntry] = []
+
+        let pattern = #"\[(.*?)\] \[(.*?)\] (.*)"#
+        let regex = try? NSRegularExpression(pattern: pattern)
+
+        for line in lines {
+            guard let regex = regex else { continue }
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard let match = regex.firstMatch(in: line, options: [], range: range),
+                  match.numberOfRanges == 4 else { continue }
 
             let dateStr = String(line[Range(match.range(at: 1), in: line)!])
             let level = String(line[Range(match.range(at: 2), in: line)!])
-            let source = String(line[Range(match.range(at: 3), in: line)!])
-            let message = String(line[Range(match.range(at: 4), in: line)!])
-
+            let message = String(line[Range(match.range(at: 3), in: line)!])
             let timestamp = formatter.date(from: dateStr) ?? Date()
-            return LogEntry(timestamp: timestamp, level: level, source: source, message: message)
+
+            let entry = LogEntry(
+                timestamp: timestamp,
+                level: level,
+                source: "Unknown", message: message,
+                channel: -1,
+                value: -1.0
+            )
+
+            entries.append(entry)
+        }
+
+        return entries
+    }
+
+
+    func readStructuredLogsAsync() async -> [LogEntry] {
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                let logs = self.readStructuredLogs()
+                continuation.resume(returning: logs)
+            }
         }
     }
 
@@ -81,46 +99,26 @@ class LogWriter {
     }
 }
 
-    /// Singleton log manager to handle stats, logs, and UI updates
-class LogManager: ObservableObject {
-    static let shared = LogManager()
-    
-    private let logWriter = LogWriter()
-    @Published private(set) var stats = AudioStats()
-    
-        /// Optional callback to deliver events to UI
-    var onLevelEvent: ((_ channel: Int, _ dB: Float, _ event: LevelEvent?) -> Void)?
-    
-    enum LevelEvent: String {
-        case silence
-        case overmodulation
-    }
-    
-    init() {
 
-        
-    }
-
-    func processLevel(_ dB: Float, channel: Int) {
-        let tag = channel == 0 ? "L" : "R"
-        
-        var event: LevelEvent? = nil
-        
-        if dB < -60 {
-            stats.silenceCount[channel] += 1
-            logWriter.write("🔇 Silence on channel \(tag)", tag: "SILENCE")
-            event = .silence
-        } else if dB > 0 {
-            stats.overmodulationCount[channel] += 1
-            logWriter.write("🚨 Overmodulation on channel \(tag)", tag: "OVERMOD")
-            event = .overmodulation
-        }
-        
-        onLevelEvent?(channel, dB, event)
+extension AudioStats {
+    var silenceCountLeft: Int {
+        get { silenceCount.indices.contains(0) ? silenceCount[0] : 0 }
+        set { if silenceCount.indices.contains(0) { silenceCount[0] = newValue } }
     }
     
-    func resetStats() {
-        stats = AudioStats()
+    var silenceCountRight: Int {
+        get { silenceCount.indices.contains(1) ? silenceCount[1] : 0 }
+        set { if silenceCount.indices.contains(1) { silenceCount[1] = newValue } }
+    }
+    
+    var overmodulationCountLeft: Int {
+        get { overmodulationCount.indices.contains(0) ? overmodulationCount[0] : 0 }
+        set { if overmodulationCount.indices.contains(0) { overmodulationCount[0] = newValue } }
+    }
+    
+    var overmodulationCountRight: Int {
+        get { overmodulationCount.indices.contains(1) ? overmodulationCount[1] : 0 }
+        set { if overmodulationCount.indices.contains(1) { overmodulationCount[1] = newValue } }
     }
 }
 
