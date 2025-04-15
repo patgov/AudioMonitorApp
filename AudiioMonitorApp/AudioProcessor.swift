@@ -1,6 +1,5 @@
 import Foundation
 import AVFoundation
-    // import Combine
 import Accelerate
 
 class AudioProcessor: ObservableObject {
@@ -31,7 +30,7 @@ class AudioProcessor: ObservableObject {
         }
     }
     
-    private func calculateLevel(from channel: UnsafePointer<Float>, count: Int) -> Float {
+    func calculateLevel(from channel: UnsafePointer<Float>, count: Int) -> Float {
         var sum: Float = 0.0
         vDSP_measqv(channel, 1, &sum, vDSP_Length(count))
         let rms = sqrt(sum)
@@ -39,3 +38,4 @@ class AudioProcessor: ObservableObject {
         return max(db, -80.0)
     }
 }
+

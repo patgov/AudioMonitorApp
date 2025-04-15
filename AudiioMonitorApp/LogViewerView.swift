@@ -1,9 +1,11 @@
 import SwiftUI
 
 struct LogViewerView: View {
-    @State private var logs: String = ""
-    
+
+    @EnvironmentObject var logManager: LogManager
     @State private var entries: [LogEntry] = []
+    @State private var logs: String = ""
+
     
     var body: some View {
         VStack {
@@ -46,7 +48,7 @@ struct LogViewerView: View {
         .frame(minWidth: 500, minHeight: 400)
         .onAppear {
             Task {
-                self.entries = await LogManager.shared.loadLogEntries()
+                self.entries = await logManager.loadLogEntries()
             }
         }
     }

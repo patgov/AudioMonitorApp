@@ -1,34 +1,22 @@
 import Foundation
 
-    /// Struct to hold current session statistics
-struct AudioStats {
-    var silenceCount: [Int] = [0, 0]   // [Left, Right]
-    var overmodulationCount: [Int] = [0, 0]
-}
+final class LogWriter: @unchecked Sendable {
+    private let logFileName = "AudioMonitorLog.txt"
 
-final class LogWriter:  @unchecked Sendable {
-
-    private(set) var logFileURL: URL
-    static let shared = LogWriter()
-    init() {
-        let filename = "AudioMonitorLog.txt"
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        logFileURL = directory.appendingPathComponent(filename)
-
-        ensureLogFile()
+    private var logFileURL: URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0].appendingPathComponent(logFileName)
     }
 
-    func write(_ message: String, tag: String) {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        let line = "[\(timestamp)] [\(tag)] \(message)\n"
+    func write(_ entry: LogEntry) {
+        let formatter = ISO8601DateFormatter()
+        let timestamp = formatter.string(from: entry.timestamp)
+        let line = "[\(timestamp)] [\(entry.level)] \(entry.source): \(entry.message) | Channel: \(entry.channel) | Value: \(String(format: "%.2f", entry.value)) | Input: \(entry.inputName) [\(entry.inputID)]\n"
         append(line: line)
-        print("📄 Writing to log file: \(line)")
     }
 
     private func append(line: String) {
-        print("📤 Writing log line: \(line)")
-        let lineWithNewline = line + "\n"  // ✅ Add newline so each log entry is a new line
-        guard let data = lineWithNewline.data(using: .utf8) else { return }
+        guard let data = line.data(using: .utf8) else { return }
 
         if FileManager.default.fileExists(atPath: logFileURL.path) {
             if let handle = try? FileHandle(forWritingTo: logFileURL) {
@@ -41,84 +29,60 @@ final class LogWriter:  @unchecked Sendable {
         }
     }
 
-
+    func clearLogFile() {
+        try? FileManager.default.removeItem(at: logFileURL)
+    }
 
     func readStructuredLogs() -> [LogEntry] {
-        guard let data = try? String(contentsOf: logFileURL, encoding: .utf8),
-              !data.isEmpty else { return [] }
+        guard let content = try? String(contentsOf: logFileURL, encoding: .utf8), !content.isEmpty
+        else {
+            return []
+        }
 
-        let lines = data.components(separatedBy: .newlines)
         let formatter = ISO8601DateFormatter()
-
         var entries: [LogEntry] = []
 
-        let pattern = #"\[(.*?)\] \[(.*?)\] (.*)"#
-        let regex = try? NSRegularExpression(pattern: pattern)
+        let lines = content.components(separatedBy: .newlines)
+
+        let pattern = #"\[(.*?)\] \[(.*?)\] (.*?): (.*?) \| Channel: (\d+) \| Value: ([\d.-]+) \| Input: (.*?) \[(\d+)\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
 
         for line in lines {
-            guard let regex = regex else { continue }
-            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            let range = NSRange(line.startIndex..., in: line)
             guard let match = regex.firstMatch(in: line, options: [], range: range),
-                  match.numberOfRanges == 4 else { continue }
+                  match.numberOfRanges == 9 else {
+                continue
+            }
 
-            let dateStr = String(line[Range(match.range(at: 1), in: line)!])
+            let timestampStr = String(line[Range(match.range(at: 1), in: line)!])
             let level = String(line[Range(match.range(at: 2), in: line)!])
-            let message = String(line[Range(match.range(at: 3), in: line)!])
-            let timestamp = formatter.date(from: dateStr) ?? Date()
+            let source = String(line[Range(match.range(at: 3), in: line)!])
+            let message = String(line[Range(match.range(at: 4), in: line)!])
+            let channelStr = String(line[Range(match.range(at: 5), in: line)!])
+            let valueStr = String(line[Range(match.range(at: 6), in: line)!])
+            let inputName = String(line[Range(match.range(at: 7), in: line)!])
+            let inputIDStr = String(line[Range(match.range(at: 8), in: line)!])
+
+            guard let timestamp = formatter.date(from: timestampStr),
+                  let channel = Int(channelStr),
+                  let value = Float(valueStr),
+                  let inputID = Int(inputIDStr) else { continue }
 
             let entry = LogEntry(
                 timestamp: timestamp,
                 level: level,
-                source: "Unknown", message: message,
-                channel: -1,
-                value: -1.0
+                source: source,
+                message: message,
+                channel: channel,
+                value: value,
+                inputName: inputName,
+                inputID: inputID
             )
 
             entries.append(entry)
         }
 
         return entries
-    }
-
-
-    func readStructuredLogsAsync() async -> [LogEntry] {
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .background).async {
-                let logs = self.readStructuredLogs()
-                continuation.resume(returning: logs)
-            }
-        }
-    }
-
-    @discardableResult
-    func ensureLogFile() -> Bool {
-        if !FileManager.default.fileExists(atPath: logFileURL.path) {
-            return FileManager.default.createFile(atPath: logFileURL.path, contents: nil)
-        }
-        return true
-    }
-}
-
-
-extension AudioStats {
-    var silenceCountLeft: Int {
-        get { silenceCount.indices.contains(0) ? silenceCount[0] : 0 }
-        set { if silenceCount.indices.contains(0) { silenceCount[0] = newValue } }
-    }
-    
-    var silenceCountRight: Int {
-        get { silenceCount.indices.contains(1) ? silenceCount[1] : 0 }
-        set { if silenceCount.indices.contains(1) { silenceCount[1] = newValue } }
-    }
-    
-    var overmodulationCountLeft: Int {
-        get { overmodulationCount.indices.contains(0) ? overmodulationCount[0] : 0 }
-        set { if overmodulationCount.indices.contains(0) { overmodulationCount[0] = newValue } }
-    }
-    
-    var overmodulationCountRight: Int {
-        get { overmodulationCount.indices.contains(1) ? overmodulationCount[1] : 0 }
-        set { if overmodulationCount.indices.contains(1) { overmodulationCount[1] = newValue } }
     }
 }
 
@@ -142,7 +106,7 @@ extension LogWriter {
         do {
             try FileManager.default.moveItem(at: logFileURL, to: archiveURL)
             print("📦 Archived log to \(archiveURL.lastPathComponent)")
-            _ = ensureLogFile()
+         //   _ = ensureLogFile()
         } catch {
             print("❌ Failed to archive log: \(error)")
         }

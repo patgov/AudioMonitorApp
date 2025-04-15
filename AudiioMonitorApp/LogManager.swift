@@ -1,74 +1,80 @@
 import Foundation
 import Combine
 
-@MainActor
 class LogManager: ObservableObject {
-    private(set) var logWriter = LogWriter()
-    static let shared = LogManager()
-    
-    @Published private(set) var entries: [LogEntry] = []
+    weak var audioManager: AudioManager!
+
+    var stats: AudioStats
+    private(set) var entries: [LogEntry] = []
     private let writer = LogWriter()
-    @Published var stats = AudioStats()
-    
-    
-    func processLevel(_ level: Float, channel: Int) {
+
+    init(audioManager: AudioManager?) {
+        self.audioManager = audioManager
+        self.stats = AudioStats(from: Date())
+    }
+
+    func processLevel(_ value: Float, channel: Int, inputName: String, inputID: Int) {
         let now = Date()
-        
-        if level < -50 {
-            log(event: .silence, value: level, channel: channel, timestamp: now)
-        } else if level > -2 {
-            log(event: .overmodulated, value: level, channel: channel, timestamp: now)
+
+        if value < -50.0 {
+            stats.recordSilence(channel: channel, timestamp: now)
+            log(event: .silence, value: value, channel: channel, timestamp: now, inputName: inputName, inputID: inputID)
+        }
+
+        if value > -2.0 {
+            stats.recordOvermodulation(channel: channel, timestamp: now)
+            log(event: .overmodulation, value: value, channel: channel, timestamp: now, inputName: inputName, inputID: inputID)
         }
     }
-    
-    func resetStats() {
-        stats = AudioStats() // resets all values to 0
-    }
-    
-    private func log(event: LogEventType, value: Float, channel: Int, timestamp: Date) {
+
+    private func log(event: LogEventType, value: Float, channel: Int, timestamp: Date, inputName: String, inputID: Int) {
         let entry = LogEntry(
             timestamp: timestamp,
             level: event.rawValue,
-            source: "Channel \(String(channel))",
-            message: "\(value)",
+            source: "Channel \(channel)",
+            message: "\(event.rawValue.capitalized) on channel \(channel)",
             channel: channel,
-            value: value  // ✅ Corrected: Pass as Float
+            value: value,
+            inputName: inputName,
+            inputID: inputID
         )
+
         DispatchQueue.main.async {
             self.entries.append(entry)
         }
-        writer.write(entry.message, tag: "Log")
+
+        writer.write(entry)
     }
-    
-    func clearLogs() {
-        entries.removeAll()
-            // writer.clearLogFile() // Ensure this method exists in LogWriter or comment this line out.
-    }
-    
-    func exportLog() -> String {
-        return entries.map { "\($0.timestamp): \($0.message)" }.joined(separator: "\n")
-    }
-    
-    struct AudioStats {
-        var silenceCountLeft: Int = 0
-        var silenceCountRight: Int = 0
-        var overmodulationCountLeft: Int = 0
-        var overmodulationCountRight: Int = 0
-    }
-    
-    @MainActor
+
+    // Use Task.detached is used to read logs on a background thread, preventing async sendability errors while preserving responsiveness
     func loadLogEntries() async -> [LogEntry] {
-            // Temporarily prints results in logManager
-        let logs = self.logWriter.readStructuredLogs()
-        print("📜 Loaded \(logs.count) entries")
-        
-        return logWriter.readStructuredLogs()
-        
+        await withCheckedContinuation { continuation in
+            let writerCopy = writer
+            Task.detached(priority: .background) {
+                let logs = writerCopy.readStructuredLogs()
+                continuation.resume(returning: logs)
+            }
+        }
+    }
+
+    func resetStats() {
+        stats = AudioStats(from: Date())
+    }
+}
+    // Preview extension
+extension LogManager {
+    static var previewInstance: LogManager {
+        let processor = AudioProcessor()
+        let dummyLogManager = LogManager(audioManager: nil)
+        let dummyAudioManager = AudioManager(processor: processor, logManager: dummyLogManager)
+        dummyLogManager.audioManager = dummyAudioManager
+
+        dummyLogManager.stats = AudioStats(from: Date())
+        return dummyLogManager
     }
 }
 
-
 enum LogEventType: String {
-    case silence = "Silence"
-    case overmodulated = "Overmodulation"
+    case silence
+    case overmodulation
 }

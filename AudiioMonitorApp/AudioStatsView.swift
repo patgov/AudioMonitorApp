@@ -6,16 +6,19 @@
     //
 
 import SwiftUI
-import Foundation
 
 struct AudioStatsView: View {
-
-
     @ObservedObject var logManager: LogManager
-    var silenceCountLeft: Int { logManager.stats.silenceCountLeft }
-    var silenceCountRight: Int { logManager.stats.silenceCountRight }
-    var overmodulationCountLeft: Int { logManager.stats.overmodulationCountLeft }
-    var overmodulationCountRight: Int { logManager.stats.overmodulationCountRight }
+
+    init(logManager: LogManager) {
+        self.logManager = logManager
+    }
+
+    @EnvironmentObject var audioManager: AudioManager
+    var silenceCountLeft: Int { logManager.stats.silenceCountLeft.count }
+    var silenceCountRight: Int { logManager.stats.silenceCountRight.count }
+    var overmodulationCountLeft: Int { logManager.stats.overmodulationCountLeft.count }
+    var overmodulationCountRight: Int { logManager.stats.overmodulationCountRight.count }
 
 
 
@@ -70,5 +73,5 @@ struct AudioStatsView: View {
 }
 
 #Preview {
-    AudioStatsView(logManager: LogManager.shared)
+    AudioStatsView(logManager: LogManager.previewInstance)
 }

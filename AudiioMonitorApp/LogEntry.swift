@@ -14,4 +14,6 @@ struct LogEntry: Identifiable {
     let message: String
     let channel: Int
     let value: Float
+    let inputName: String
+    let inputID: Int
 }
