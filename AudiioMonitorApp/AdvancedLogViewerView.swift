@@ -1,146 +1,130 @@
-    //
-    //  AdvancedLogViewerView.swift
-    //  AudiioMonitorApp
-    //
-    //  Created by Pat Govan on 3/30/25.
-    //
-
-
 import SwiftUI
-import UniformTypeIdentifiers
+import CoreAudio
 
 struct AdvancedLogViewerView: View {
-    var entries: [LogEntry]
-    var logManager: LogManager
+    let entries: [LogEntry]
+    let logManager: any LogManagerProtocol
+
+    @State private var selectedDevice = InputAudioDevice(id: "mock", uid: "mock-uid", name: "Mock Mic", audioObjectID: AudioObjectID(999),channelCount: 2)
+    @State private var selectedLogLevel = "INFO"
+
+    private var filteredEntries: [LogEntry] {
+        entries.filter { $0.level == selectedLogLevel }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Log Viewer")
-                .font(.title)
-                .bold()
+        VStack(spacing: 16) {
+            AdvancedLogViewerControlView(
+                inputDevices: [selectedDevice],
+                selectedDevice: $selectedDevice,
+                selectedLogLevel: $selectedLogLevel
+            )
 
-            if entries.isEmpty {
-                Text("No log entries available.")
-                    .foregroundColor(.secondary)
-            } else {
-                List(entries) { entry in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("[\(entry.level)] \(entry.message)")
-                            .font(.body)
-                        Text("Source: \(entry.source), Input: \(entry.inputName), Channel: \(entry.channel)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+            List(filteredEntries) { entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.timestamp.formatted(date: .numeric, time: .standard))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(entry.message)
+                        .font(.body)
+                    HStack {
+                        if let channel = entry.channel {
+                            Text("Ch: \(channel)")
+                        }
+                        if let value = entry.value {
+                            Text("Value: \(value, specifier: "%.1f") dB")
+                        }
                     }
-                    .padding(.vertical, 4)
+                    .font(.footnote)
+                    .foregroundColor(.gray)
                 }
-
-
+                .padding(.vertical, 4)
             }
+
+            Text("Current Input: \(logManager.latestStats.inputName)")
+                .font(.footnote)
+                .foregroundColor(.secondary)
         }
         .padding()
     }
 }
 
-#Preview {
-    let processor = AudioProcessor()
-    let placeholderLogManager = LogManager(audioManager: nil)
-    let dummyAudioManager = AudioManager(processor: processor, logManager: placeholderLogManager)
-    placeholderLogManager.audioManager = dummyAudioManager
+    //struct LogEntryView: View {
+    //   public let entry: AudioLogEntry
+    //    let backgroundColor = Color.gray.opacity(0.12)
+    //    var body: some View {
+    //        let timestamp = entry.timestamp.formatted(date: .numeric, time: .standard)
+    //        let value = String(format: "%.2f", entry.value)
+    //
+    //        return VStack(alignment: .leading, spacing: 4) {
+    //            Text(timestamp)
+    //                .font(.caption2)
+    //                .foregroundColor(.secondary)
+    //
+    //            Text("\(entry.level): \(entry.message)")
+    //                .font(.body)
+    //                .foregroundColor(entry.level == "ERROR" ? .red : (entry.level == "WARNING" ? .yellow : .primary))
+    //
+    //            Text("Source: \(entry.source) | Channel: \(entry.channel) | Value: \(value)")
+    //                .font(.caption)
+    //                .foregroundColor(.gray)
+    //        }
+    //        .padding(6)
+    //        .background(RoundedRectangle(cornerRadius: 8).fill(backgroundColor))
+    //    }
+    //}
 
+#Preview {
     let dummyEntries = [
         LogEntry(
             timestamp: Date(),
             level: "INFO",
-            source: "Test",
-            message: "Test entry",
+            source: "Preview",
+            message: "Audio started",
             channel: 0,
-            value: 0.0,
-            inputName: "PreviewMic",
-            inputID: 123
-        )
-    ]
-
-        // ✅ Return a View type directly
-    return AdvancedLogViewerView(entries: dummyEntries, logManager: placeholderLogManager)
-}
-
-        // MARK: - Document type for export
-    struct LogFileDocument: FileDocument {
-        static var readableContentTypes: [UTType] { [.plainText] }
-        var content: String
-
-        init(content: String) {
-            self.content = content
-        }
-
-        init(configuration: ReadConfiguration) throws {
-            guard let data = configuration.file.regularFileContents,
-                  let string = String(data: data, encoding: .utf8) else {
-                throw CocoaError(.fileReadCorruptFile)
-            }
-            content = string
-        }
-
-        func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-            let data = content.data(using: .utf8)!
-            return FileWrapper(regularFileWithContents: data)
-        }
-    }
-
-
-
-#Preview {
-    let processor = AudioProcessor()
-
-    let dummyLogManager = LogManager(audioManager: DummyAudioManager())
-
-    let dummyEntries = [
+            value: -42.3,
+            inputName: "Built-in Mic",
+            inputID: 1
+        ),
         LogEntry(
             timestamp: Date(),
-            level: "INFO",
-            source: "Test",
-            message: "This is a test log entry",
+            level: "WARNING",
+            source: "Preview",
+            message: "Silence detected",
+            channel: 1,
+            value: -80.0,
+            inputName: "Built-in Mic",
+            inputID: 1
+        ),
+        LogEntry(
+            timestamp: Date(),
+            level: "ERROR",
+            source: "Preview",
+            message: "Overmodulation",
             channel: 0,
-            value: 0.0,
-            inputName: "MockMic",
-            inputID: 42
+            value: 2.5,
+            inputName: "Built-in Mic",
+            inputID: 1
         )
     ]
 
-    AdvancedLogViewerView(entries: dummyEntries, logManager: dummyLogManager)
+    AdvancedLogViewerView(
+        entries: dummyEntries,
+        logManager: PreviewSafeLogManager(latestStats: .preview)
+    )
 }
 
-#Preview {
-    let logManager = LogManager.previewInstance
 
-    return LogLoaderPreviewView(logManager: logManager)
-}
 
-private struct LogLoaderPreviewView: View {
-    @State private var entries: [LogEntry] = []
-    let logManager: LogManager
 
-    var body: some View {
-        AdvancedLogViewerView(entries: entries, logManager: logManager)
-            .task {
-                self.entries = await logManager.loadLogEntries()
-            }
-    }
-}
 
-struct AdvancedLogViewerPreviewContainer: View {
-    @State private var entries: [LogEntry] = []
-    private let logManager = LogManager(audioManager: DummyAudioManager())
-
-    var body: some View {
-        AdvancedLogViewerView(entries: entries, logManager: logManager)
-            .task {
-                let logs = await logManager.loadLogEntries()
-                self.entries = logs
-            }
-    }
-}
-
-#Preview {
-    AdvancedLogViewerPreviewContainer()
-}
+    //
+    //#Preview("Advanced Log Viewer Preview") {
+    //    let dummyAudioManager = AudioManager()
+    //    let dummyLogManager = LogManager(audioManager: dummyAudioManager)
+    //
+    //    dummyLogManager.addWarning(message: "Preview warning", channel: 0, value: -72.0)
+    //    dummyLogManager.addError(message: "Preview error", channel: 1, value: -1.5)
+    //
+    //    return AdvancedLogViewerView(logManager: dummyLogManager)
+    //}

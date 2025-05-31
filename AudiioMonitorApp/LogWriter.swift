@@ -11,7 +11,8 @@ final class LogWriter: @unchecked Sendable {
     func write(_ entry: LogEntry) {
         let formatter = ISO8601DateFormatter()
         let timestamp = formatter.string(from: entry.timestamp)
-        let line = "[\(timestamp)] [\(entry.level)] \(entry.source): \(entry.message) | Channel: \(entry.channel) | Value: \(String(format: "%.2f", entry.value)) | Input: \(entry.inputName) [\(entry.inputID)]\n"
+        let value = entry.value ?? 0.0
+        let line = "[\(timestamp)] [\(entry.level)] \(entry.source): \(entry.message) | Channel: \(String(describing: entry.channel)) | Value: \(String(format: "%.2f", value)) | Input: \(entry.inputName) [\(entry.inputID)]\n"
         append(line: line)
     }
 
@@ -96,17 +97,17 @@ extension LogWriter {
             return ""
         }
     }
-    
+
         /// Moves the current log to an archive and resets the file
     func archiveAndResetLog() {
         let timestamp = Date().formatted(.iso8601).replacingOccurrences(of: ":", with: "-")
         let archiveURL = logFileURL.deletingLastPathComponent()
             .appendingPathComponent("log-\(timestamp).txt")
-        
+
         do {
             try FileManager.default.moveItem(at: logFileURL, to: archiveURL)
             print("📦 Archived log to \(archiveURL.lastPathComponent)")
-         //   _ = ensureLogFile()
+                //   _ = ensureLogFile()
         } catch {
             print("❌ Failed to archive log: \(error)")
         }

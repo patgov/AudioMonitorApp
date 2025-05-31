@@ -1,46 +1,40 @@
-//
-//  AudioStats.swift
-//  AudiioMonitorApp
-//
-//  Created by Pat Govan on 4/11/25.
-//
-
-import SwiftUI
 import Foundation
 
-struct AudioStats {
-    var silenceCountLeft: [Int]
-    var silenceCountRight: [Int]
-    var overmodulationCountLeft: [Int]
-    var overmodulationCountRight: [Int]
+public struct AudioStats: Codable, Equatable, Hashable, Sendable {
+    public var left: Float
+    public var right: Float
+    public var inputName: String
+    public var inputID: Int
 
-    var startTime: Date
+    public var timestamp: Date
+    public var overmodulationCount: Int
+    public var silenceCount: Int
 
-    init(from date: Date) {
-        self.startTime = date
-        self.silenceCountLeft = []
-        self.silenceCountRight = []
-        self.overmodulationCountLeft = []
-        self.overmodulationCountRight = []
+    public init(
+        left: Float,
+        right: Float,
+        inputName: String,
+        inputID: Int,
+        timestamp: Date = .now,
+        overmodulationCount: Int = 0,
+        silenceCount: Int = 0
+    ) {
+        self.left = left
+        self.right = right
+        self.inputName = inputName
+        self.inputID = inputID
+        self.timestamp = timestamp
+        self.overmodulationCount = overmodulationCount
+        self.silenceCount = silenceCount
     }
 
-    mutating func recordSilence(channel: Int, timestamp: Date) {
-        if channel == 0 {
-            silenceCountLeft.append(Int(timestamp.timeIntervalSince(startTime)))
-        } else if channel == 1 {
-            silenceCountRight.append(Int(timestamp.timeIntervalSince(startTime)))
-        }
+    public static var zero: AudioStats {
+        AudioStats(left: -80.0, right: -80.0, inputName: "None", inputID: 0)
     }
 
-    mutating func recordOvermodulation(channel: Int, timestamp: Date) {
-        if channel == 0 {
-            overmodulationCountLeft.append(Int(timestamp.timeIntervalSince(startTime)))
-        } else if channel == 1 {
-            overmodulationCountRight.append(Int(timestamp.timeIntervalSince(startTime)))
-        }
-    }
-
-    mutating func reset(from date: Date) {
-        self = AudioStats(from: date)
+    public static var preview: AudioStats {
+        AudioStats(left: -22.5, right: -21.3, inputName: "Mock Mic", inputID: 1)
     }
 }
+
+

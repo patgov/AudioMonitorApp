@@ -1,103 +1,130 @@
 import SwiftUI
+import Combine
 
-    // AudioMonitorView.swift
+
 
 struct AudioMonitorView: View {
-    @ObservedObject var viewModel: AudioMonitorViewModel
-    @State private var hasAppeared = false
     
-    var body: some View {
-        ZStack {
-            VStack(spacing: 20) {
-                AnalogVUMeterView(
-                    leftLevel: $viewModel.leftLevel,
-                    rightLevel: $viewModel.rightLevel
-                )
-             //   .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-//                Text(String(format: "L: %.1f dB, R: %.1f dB", viewModel.leftLevel, viewModel.rightLevel))
-//                    .foregroundColor(viewModel.leftLevel > 0 || viewModel.rightLevel > 0 ? .red :
-//                                        (viewModel.leftLevel >= -3 || viewModel.rightLevel >= -3 ? .yellow : .green))
-//                    .font(.caption)
-                
-//                HStack(spacing: 30) {
-//                    DBMeterBar(value: viewModel.leftLevel, label: "L")
-//                    DBMeterBar(value: viewModel.rightLevel, label: "R")
-//                }
-//                
-                Text(viewModel.statusText)
-                    .foregroundColor(viewModel.statusColor)
-                    .font(.headline)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .padding()
-            //.frame(minWidth: 200, minHeight: 150)
-            .onAppear {
-                guard !hasAppeared else { return }
-                hasAppeared = true
-                viewModel.audioManager.start()
-                viewModel.bindToAudioProcessor()
-                viewModel.loadLogData()
-            }
+    @StateObject var viewModel: AudioMonitorViewModel
+    @StateObject var deviceManager: AudioDeviceManager
+    
+        /// Converts a dBFS value to analog VU units with clamping
+        /// Converts a dBFS value to analog VU units with clamping and nonlinear scaling
+    private func vuFromDbFS(_ db: Float) -> Float {
+        let clamped = max(min(db, 0), -80)
+        switch clamped {
+            case -80 ... -40:
+                return -20 + (clamped + 80) * 0.125  // very low range
+            case -40 ... -20:
+                return -10 + (clamped + 40) * 0.25   // quiet-mid
+            case -20 ... -12:
+                return 0 + (clamped + 20) * 0.375    // calibrated zone
+            case -12 ... -6:
+                return 3 + (clamped + 12) * 0.5      // strong signal
+            case -6 ... 0:
+                return 6 + (clamped + 6) * 0.1666    // near max
+            default:
+                return -20
         }
-    }
-}
-
-struct DBMeterBar: View {
-    let value: Float
-    let label: String
-    
-    var barColor: Color {
-        if value > 0 { return .red }
-        else if value >= -3 { return .yellow }
-        else { return .green }
     }
     
     var body: some View {
-        VStack {
-            Text(label)
-                .font(.caption)
-                .foregroundColor(.white)
-            ZStack(alignment: .bottom) {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 20, height: 100)
-                    .cornerRadius(5)
-                
-                Rectangle()
-                    .fill(barColor)
-                    .frame(width: 20, height: CGFloat((100 + value) / 100 * 100))
-                    .cornerRadius(5)
+        VStack(spacing: 32) {
+            Group {
+                VStack(spacing: 28) {
+                        // Display selected input
+                    Text("🎙 Current Input: \(deviceManager.selected.displayName)")
+                        .font(.headline)
+                    
+                        // ✅ Input device picker
+                    Picker("Input Device", selection: $deviceManager.selected) {
+                        ForEach(deviceManager.devices, id: \.id) { device in
+                            Text(device.displayName).tag(device)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .onAppear {
+                        deviceManager.fetchAvailableDevices()
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            if deviceManager.devices.isEmpty {
+                                print("❌ No devices fetched.")
+                            } else {
+                                if let defaultID = InputAudioDevice.fetchDefaultInputDeviceID(),
+                                   let match = deviceManager.devices.first(where: { $0.audioObjectID == defaultID }) {
+                                    deviceManager.selected = match
+                                    print("🎯 Selected system default device: \(match.displayName)")
+                                } else if let fallback = deviceManager.devices.first {
+                                    deviceManager.selected = fallback
+                                    print("⚠️ Fallback selected: \(fallback.displayName)")
+                                }
+                                
+                                    // Ensure monitoring is triggered for selected device
+                                viewModel.selectInputDevice(deviceManager.selected)
+                                viewModel.startMonitoring()
+                            }
+                        }
+                    }
+                    .onChange(of: deviceManager.selected) { newValue, _ in
+                        viewModel.selectInputDevice(newValue)
+                        viewModel.startMonitoring()
+                    }
+                    
+                        // Visual monitoring
+                    ZStack(alignment: .top) {
+                        VUMeterPreviewWrapper(
+                            leftLevel: vuFromDbFS(viewModel.latestStats.left),
+                            rightLevel: vuFromDbFS(viewModel.latestStats.right)
+                        )
+                        .frame(height: 240)
+                        .frame(maxWidth: .infinity)
+                        .layoutPriority(1)
+                    }
+                    .padding(.horizontal)
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Text("Left: \(viewModel.latestStats.left, specifier: "%.1f") dB")
+                            Text("Right: \(viewModel.latestStats.right, specifier: "%.1f") dB")
+                        }
+                        .frame(height: 20)
+                        
+                        HStack(spacing: 10) {
+                            if viewModel.isSilenceDetected {
+                                Text("⚠️ Silence Detected").foregroundColor(.orange)
+                            }
+                            
+                            if viewModel.isOvermodulated {
+                                Text("❌ Overmodulated").foregroundColor(.red)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                }
             }
         }
+        .padding()
     }
 }
 
-struct AudioMonitorView_Previews: PreviewProvider {
-    struct Container: View {
-        @StateObject var dummyViewModel: AudioMonitorViewModel = {
-            let dummyProcessor = AudioProcessor()
-            let dummyAudioManager = DummyAudioManager(processor: dummyProcessor)
-            let dummyLogManager = LogManager(audioManager: dummyAudioManager)
-            return AudioMonitorViewModel(audioManager: dummyAudioManager, logManager: dummyLogManager)
-        }()
-        
-        var body: some View {
-            AudioMonitorView(viewModel: dummyViewModel)
-        }
-    }
-    
-    static var previews: some View {
-        Container()
-            .previewLayout(.sizeThatFits)
-    }
-}
+//struct VUMeterPreviewWrapper: View {
+//    var leftLevel: Float
+//    var rightLevel: Float
+//    
+//    var body: some View {
+//        StyledAnalogVUMeterView(leftLevel: leftLevel, rightLevel: rightLevel)
+//    }
+//}
 
-#Preview {
-    let placeholderProcessor = AudioProcessor()
-    let placeholderAudioManager = AudioManager(processor: placeholderProcessor, logManager: nil)
-    let placeholderLogManager = LogManager(audioManager: placeholderAudioManager)
-    let viewModel = AudioMonitorViewModel(audioManager: placeholderAudioManager, logManager: placeholderLogManager)
+#Preview("Audio Monitor View Preview", traits: .sizeThatFitsLayout) {
+    let audioManager: AudioManagerProtocol = AudioManager()
+    let logManager: LogManagerProtocol = LogManager(audioManager: audioManager)
+    let deviceManager = AudioDeviceManager(audioManager: audioManager)
+    let viewModel = AudioMonitorViewModel(audioManager: audioManager, logManager: logManager)
     
-    AudioMonitorView(viewModel: viewModel)
+    return AudioMonitorView(viewModel: viewModel, deviceManager: deviceManager)
 }

@@ -1,59 +1,46 @@
 import SwiftUI
 
 struct LogViewerView: View {
+    @ObservedObject var logManager: LogManager
 
-    @EnvironmentObject var logManager: LogManager
-    @State private var entries: [LogEntry] = []
-    @State private var logs: String = ""
-
-    
     var body: some View {
-        VStack {
-            Text("Log Entries")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Log Viewer")
                 .font(.title2)
-                .padding()
-            
-            if entries.isEmpty {
+                .padding(.bottom, 4)
+
+            if logManager.logEntries.isEmpty {
                 Text("No log entries available.")
                     .foregroundColor(.secondary)
-                    .padding()
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(entries) { entry in
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(logManager.logEntries) { entry in
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("[\(entry.timestamp.formatted())] [\(entry.level.uppercased())] [\(entry.source)]")
-                                    .font(.caption)
+                                Text(entry.timestamp.formatted(date: .numeric, time: .standard))
+                                    .font(.caption2)
                                     .foregroundColor(.secondary)
+
                                 Text(entry.message)
                                     .font(.body)
+
+                                Text("Level: \(entry.level) • Source: \(entry.source) • Channel: \(String(describing: entry.channel))")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
                             }
-                            .padding(8)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(8)
+                            .padding(6)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.15)))
                         }
                     }
-                    .padding()
                 }
             }
-            
-            Spacer()
-            
-            Button("Close") {
-                NSApp.keyWindow?.close()
-            }
-            .padding(.top, 10)
         }
         .padding()
-        .frame(minWidth: 500, minHeight: 400)
-        .onAppear {
-            Task {
-                self.entries = await logManager.loadLogEntries()
-            }
-        }
     }
 }
 
 #Preview {
-    LogViewerView()
+    let dummyLogManager = LogManager(audioManager: AudioManager())
+   // dummyLogManager.addInfo(message: "Preview log message", channel: 0, value: -42.5)
+    LogViewerView(logManager: dummyLogManager)
 }

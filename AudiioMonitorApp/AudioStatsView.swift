@@ -1,77 +1,52 @@
-    //
-    //  AudioStatsView.swift
-    //  AudiioMonitorApp
-    //
-    //  Created by Pat Govan on 4/1/25.
-    //
-
 import SwiftUI
 
-struct AudioStatsView: View {
-    @ObservedObject var logManager: LogManager
-
-    init(logManager: LogManager) {
-        self.logManager = logManager
-    }
-
-    @EnvironmentObject var audioManager: AudioManager
-    var silenceCountLeft: Int { logManager.stats.silenceCountLeft.count }
-    var silenceCountRight: Int { logManager.stats.silenceCountRight.count }
-    var overmodulationCountLeft: Int { logManager.stats.overmodulationCountLeft.count }
-    var overmodulationCountRight: Int { logManager.stats.overmodulationCountRight.count }
-
-
-
+struct AudioStatusView: View {
+    let engineRunning: Bool
+    let inputName: String?
+    let stats: AudioStats
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("📈 Audio Stats").font(.headline)
-
-            HStack(spacing: 20) {
-                statLabel("L", icon: "waveform", color: .blue)
-                statLabel("R", icon: "waveform", color: .green)
-            }
-
-            Divider()
-
-            HStack {
-                countBlock("🔇 Silence", counts: [
-                    silenceCountLeft,
-                    silenceCountRight
-                ])
-                countBlock("🚨 Overmod", counts: [
-                    overmodulationCountLeft,
-                    overmodulationCountRight
-                ])
-            }
-
-            Button("Reset Stats", action: {
-              logManager.resetStats()
-            })
-            .padding(.top, 10)
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Engine: \(engineRunning ? "Running" : "Stopped")", systemImage: "waveform")
+            Label("Device: \(inputName ?? "None")", systemImage: "mic.fill")
+            Label("L dB: \(String(format: "%.1f", stats.left))", systemImage: "speaker.wave.1.fill")
+            Label("R dB: \(String(format: "%.1f", stats.right))", systemImage: "speaker.wave.2.fill")
         }
         .padding()
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(radius: 4)
+        .background(Color.gray.opacity(0.15))
+        .cornerRadius(10)
     }
+}
 
-    func statLabel(_ channel: String, icon: String, color: Color) -> some View {
-        Label("Channel \(channel)", systemImage: icon)
-            .foregroundStyle(color)
-            .font(.subheadline)
-    }
-
-    func countBlock(_ title: String, counts: [Int]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).bold()
-            HStack(spacing: 16) {
-                Text("L: \(counts[0])").monospacedDigit()
-                Text("R: \(counts[1])").monospacedDigit()
+struct AudioStatsView: View {
+    let stats: AudioStats
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Audio Levels")
+                .font(.headline)
+            
+            HStack(spacing: 24) {
+                VStack {
+                    Text("Left")
+                    Text(String(format: "%.1f dB", stats.left))
+                        .foregroundColor(stats.left > -1 ? .red : .primary)
+                }
+                
+                VStack {
+                    Text("Right")
+                    Text(String(format: "%.1f dB", stats.right))
+                        .foregroundColor(stats.right > -1 ? .red : .primary)
+                }
             }
+            .font(.title3)
         }
+        .padding()
     }
 }
 
 #Preview {
-    AudioStatsView(logManager: LogManager.previewInstance)
+    AudioStatusView(engineRunning: true, inputName: "Built-in Mic", stats: .preview)
+    AudioStatsView(stats: .preview)
 }
+    //focus on building a status view that shows actual engine/device status in-app?

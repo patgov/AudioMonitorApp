@@ -10,9 +10,22 @@
 		3D69EBE62D9970800056F87C /* AudiioMonitorApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudiioMonitorApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		3DB70A8C2DD7DE6F0027C120 /* Exceptions for "AudiioMonitorApp" folder in "AudiioMonitorApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3D69EBE52D9970800056F87C /* AudiioMonitorApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		3D69EBE82D9970800056F87C /* AudiioMonitorApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3DB70A8C2DD7DE6F0027C120 /* Exceptions for "AudiioMonitorApp" folder in "AudiioMonitorApp" target */,
+			);
 			path = AudiioMonitorApp;
 			sourceTree = "<group>";
 		};
@@ -259,9 +272,12 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"AudiioMonitorApp/Preview Content\"";
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AudiioMonitorApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor ";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires access to the microphone to monitor audio levels.";
@@ -292,9 +308,12 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"AudiioMonitorApp/Preview Content\"";
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AudiioMonitorApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor ";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires access to the microphone to monitor audio levels.";

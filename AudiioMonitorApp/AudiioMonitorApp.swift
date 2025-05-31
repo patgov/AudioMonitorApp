@@ -2,32 +2,28 @@ import SwiftUI
 
 @main
 struct AudiioMonitorApp: App {
-    private let processor = AudioProcessor()
-    private let audioManager: AudioManager
-    @StateObject private var logManager: LogManager
-    @StateObject private var viewModel: AudioMonitorViewModel
-
+        // Create shared objects outside the body
+    let audioManager = AudioManagerWrapper(manager: AudioManager())
+    let logManager: LogManager
+    let viewModel: AudioMonitorViewModel
+    let deviceManager: AudioDeviceManager
+    
     init() {
-            // Step 1: Create log manager with a temporary placeholder
-        let temporaryLogManager = LogManager(audioManager: nil)
-
-            // Step 2: Now that we have the log manager, we can initialize the audio manager
-        let actualAudioManager = AudioManager(processor: processor, logManager: temporaryLogManager)
-
-            // Step 3: Inject audioManager back into the log manager
-        temporaryLogManager.audioManager = actualAudioManager
-
-            // Assign to properties
-        self.audioManager = actualAudioManager
-        _logManager = StateObject(wrappedValue: temporaryLogManager)
-        _viewModel = StateObject(wrappedValue: AudioMonitorViewModel(audioManager: actualAudioManager, logManager: temporaryLogManager))
+        logManager = LogManager(audioManager: audioManager)
+        viewModel = AudioMonitorViewModel(audioManager: audioManager, logManager: logManager)
+        deviceManager = AudioDeviceManager(audioManager: audioManager)
+        
+        print("🎬 App initialized")
+        print("🧩 Available input devices at launch: \(deviceManager.devices.map(\.name))")
+        
+        viewModel.startMonitoring()
+        
+        LogSystem.reportStartupStatus()
     }
-
+    
     var body: some Scene {
         WindowGroup {
-            AudioMonitorView(viewModel: viewModel)
-                .environmentObject(audioManager)
-                .environmentObject(logManager)
+            AudioMonitorView(viewModel: viewModel, deviceManager: deviceManager)
         }
     }
 }

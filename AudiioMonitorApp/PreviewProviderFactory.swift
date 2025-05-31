@@ -16,11 +16,11 @@ enum PreviewProviderFactory {
     @MainActor static func makeAudioMonitorViewModelPreview() -> AudioMonitorViewModel {
         let audioManager = AudioManager()
         let logManager = LogManager(audioManager: audioManager)
-        return AudioMonitorViewModel(logManager: logManager, processor: audioManager.processor)
+        return AudioMonitorViewModel(audioManager: audioManager, logManager: logManager)
     }
     
     @MainActor static func makeAudioMonitorViewPreview() -> some View {
         let viewModel = makeAudioMonitorViewModelPreview()
-        return AudioMonitorView(viewModel: viewModel)
+        return AudioMonitorView(viewModel: viewModel, deviceManager: AudioDeviceManager(audioManager: DummyAudioManager()))
     }
 }

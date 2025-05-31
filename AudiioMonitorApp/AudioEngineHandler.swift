@@ -1,52 +1,99 @@
-//
-//  AudioEngineHandler.swift.swift
-//  AudiioMonitorApp
-//
-//  Created by Pat Govan on 5/12/25.
-//
+    //
+    //  AudioEngineHandler.swift.swift
+    //  AudiioMonitorApp
+    //
+    //  Created by Pat Govan on 5/12/25.
+    //
 
-import AVFoundation
 import Foundation
+import AVFoundation
+import CoreAudio
 
     /// Handles audio engine setup, input format configuration, and buffer tap installation.
+
+
 class AudioEngineHandler {
-    private let engine = AVAudioEngine()
-    private var inputNode: AVAudioInputNode? {
-        engine.inputNode
-    }
-
-    var inputFormat: AVAudioFormat? {
-        inputNode?.inputFormat(forBus: 0)
-    }
-
-        /// Starts the AVAudioEngine and installs a tap to capture audio buffers.
-        /// - Parameters:
-        ///   - onBuffer: Callback providing audio buffer for processing.
-        /// - Throws: Any error encountered when starting the audio engine.
-    func startEngine(onBuffer: @escaping (AVAudioPCMBuffer, AVAudioTime) -> Void) throws {
-        guard let inputNode = inputNode else {
-            throw NSError(domain: "AudioEngineHandler", code: -1, userInfo: [NSLocalizedDescriptionKey: "No input node available"])
+    private var audioEngine = AVAudioEngine()
+    private var inputNode: AVAudioInputNode?
+    private var bufferSize: AVAudioFrameCount = 1024
+    
+    func configureAudioInput(completion: @escaping (String?) -> Void) {
+            // macOS-compatible input device detection
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        var deviceID = AudioDeviceID(0)
+        var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
+        
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &propertySize,
+            &deviceID
+        )
+        
+        guard status == noErr else {
+            completion(nil)
+            return
         }
-
-        let format = inputNode.inputFormat(forBus: 0)
-
-        inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, time in
+        
+        var nameSize: UInt32 = 0
+        var nameAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceNameCFString,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+            // First, determine the size of the name data
+        let nameSizeStatus = AudioObjectGetPropertyDataSize(deviceID, &nameAddress, 0, nil, &nameSize)
+        guard nameSizeStatus == noErr else {
+            completion(nil)
+            return
+        }
+        
+        let namePtr = UnsafeMutableRawPointer.allocate(byteCount: Int(nameSize), alignment: MemoryLayout<CFString>.alignment)
+        defer {
+            namePtr.deallocate()
+        }
+        
+        let nameStatus = AudioObjectGetPropertyData(deviceID, &nameAddress, 0, nil, &nameSize, namePtr)
+        guard nameStatus == noErr else {
+            completion(nil)
+            return
+        }
+        
+        let name = namePtr.load(as: CFString.self)
+        completion(name as String)
+    }
+    
+    func setupTap(onBuffer: @escaping (AVAudioPCMBuffer, AVAudioTime) -> Void) {
+        inputNode = audioEngine.inputNode
+        let inputFormat = inputNode!.outputFormat(forBus: 0)
+        
+        let stereoFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: inputFormat.sampleRate,
+            channels: 2,
+            interleaved: false
+        )
+        
+        inputNode?.installTap(onBus: 0, bufferSize: bufferSize, format: stereoFormat) { buffer, time in
+            print("📡 Audio buffer received — Frame length: \(buffer.frameLength)")
             onBuffer(buffer, time)
         }
-
-        try engine.start()
     }
-
-        /// Stops the AVAudioEngine and removes the input tap.
-    func stopEngine() {
+    
+    func start() throws {
+        try audioEngine.start()
+    }
+    
+    func stop() {
         inputNode?.removeTap(onBus: 0)
-        engine.stop()
-    }
-
-        /// Returns the name of the current input device, if available.
-    var currentInputDeviceName: String {
-        AVAudioSession.sharedInstance().preferredInput?.portName ?? "Unknown"
+        audioEngine.stop()
     }
 }
-
