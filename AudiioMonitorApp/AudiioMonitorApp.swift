@@ -25,5 +25,6 @@ struct AudiioMonitorApp: App {
         WindowGroup {
             AudioMonitorView(viewModel: viewModel, deviceManager: deviceManager)
         }
+        
     }
 }

@@ -17,6 +17,12 @@ public final class AudioMonitorViewModel: ObservableObject {
     @Published public var leftLevel: Float = -80.0
     @Published public var rightLevel: Float = -80.0
     @Published public var selectedInputDevice: InputAudioDevice = .none
+    @Published public var showInputSelectionMessage: Bool = false
+    @Published public var inputPickerWasUsed: Bool = false
+    
+    public func setInputPickerUsed(_ used: Bool) {
+        inputPickerWasUsed = used
+    }
     
         // MARK: - Initialization and Subscriptions
     
@@ -46,6 +52,7 @@ public final class AudioMonitorViewModel: ObservableObject {
                         //     return
                         // }
                     self?.selectedInputDevice = device
+                    self?.showInputSelectionMessage = (device != .none)
                 }
                 .store(in: &cancellables)
         }

@@ -119,14 +119,14 @@ struct StyledAnalogVUMeterView: View {
             .background(Color(red: 0.96, green: 0.94, blue: 0.86))
             .aspectRatio(contentMode: .fit)
             .frame(width: geometry.size.width, height: geometry.size.width)
-            .padding(5)
-            .overlay(
-                Text("L / R")
-                    .font(.subheadline.bold())
-                    .foregroundColor(.black.opacity(0.8))
-                    .padding(.top, 110),
-                alignment: .center
-            )
+     //       .padding(5)
+    //.overlay(
+   //         Text(label: )
+//                    .font(.subheadline.bold())
+//                    .foregroundColor(.black.opacity(0.8))
+//                    .padding(.top, 110),
+//                alignment: .center
+ //        )
         }
     }
     
@@ -151,7 +151,7 @@ let ticks: [((String, String), Float)] = [
     (("-7", "-24"), -7),
     (("-3", "-18"), -3),    // was -2.5
     (("0", "-12"), 0),      // was -0.8
-    (("+1", "-6"), 1.0),      // updated from 1.2
+    (("+1", "-6"), 1.1),      // updated from 1.2
     (("+2", "-4"), 2.0),      // updated from 2.2
     (("+3", "-2"), 3.0)      // updated from 3.8
     
@@ -203,8 +203,8 @@ private struct CustomTickMarks: View {
                 path.move(to: CGPoint(x: startX, y: startY))
                 path.addLine(to: CGPoint(x: endX, y: endY))
             }
-            .stroke(Color.black, lineWidth: 1.5)
-            
+         //   .stroke(Color.black, lineWidth: 1.5)
+
                 // Position dB label slightly closer to tick marks
             let dbLabelX = centerX + (arcRadius + labelOffset * 0.9) * x
             let dbLabelY = centerY + (arcRadius + labelOffset * 0.9) * y

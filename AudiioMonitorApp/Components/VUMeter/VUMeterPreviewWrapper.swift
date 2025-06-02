@@ -6,10 +6,32 @@ struct VUMeterPreviewWrapper: View {
 
     var body: some View {
         HStack(spacing: 40) {
-            StyledAnalogVUMeterView(leftLevel: leftLevel, rightLevel: rightLevel)
-                .frame(width: 280, height: 280)
-            StyledAnalogVUMeterView(leftLevel: leftLevel, rightLevel: rightLevel)
-                .frame(width: 280, height: 280)
+            ZStack {
+                StyledAnalogVUMeterView(leftLevel: leftLevel, rightLevel: rightLevel)
+                    .frame(width: 280, height: 280)
+
+                    .overlay(
+                        Text("L" )
+                            .font(.subheadline.bold())
+                            .foregroundColor(.black.opacity(0.8))
+                            .padding(.top, 110),
+                        alignment: .center
+                    )
+
+            }
+
+
+                StyledAnalogVUMeterView(leftLevel: leftLevel, rightLevel: rightLevel)
+                    .frame(width: 280, height: 280)
+
+                    .overlay(
+                             Text("R" )
+                                        .font(.subheadline.bold())
+                                        .foregroundColor(.black.opacity(0.8))
+                                        .padding(.top, 110),
+                                    alignment: .center
+                            )
+
         }
     }
 }
