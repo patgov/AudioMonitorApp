@@ -1,0 +1,648 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		3D9B79DA2DF0885D00F528F3 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D62A1D32DEDFB55002FFCC9 /* WidgetKit.framework */; };
+		3D9B79DB2DF0885D00F528F3 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D62A1D52DEDFB55002FFCC9 /* SwiftUI.framework */; };
+		3D9B79E72DF0885E00F528F3 /* AudioMonitorWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3D9B79D92DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		3D3F4A142DEF8BEC00FC2DEB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
+			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
+		};
+		3D3F4A172DEF8C8100FC2DEB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
+			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
+		};
+		3D3F4A192DEF8CA400FC2DEB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
+			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
+		};
+		3D3F4A1B2DEF8D3600FC2DEB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
+			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
+		};
+		3D9B79E52DF0885E00F528F3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D9B79D82DF0885D00F528F3;
+			remoteInfo = AudioMonitorWidgetExtensionExtension;
+		};
+		3DF14FB12DEF85260039BAFE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
+			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
+		};
+		3DF14FB32DEF855E0039BAFE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
+			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
+		};
+		3DF14FB52DEF85960039BAFE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
+			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		3D3F4A162DEF8BEC00FC2DEB /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				3D9B79E72DF0885E00F528F3 /* AudioMonitorWidgetExtensionExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		3D62A1D32DEDFB55002FFCC9 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		3D62A1D52DEDFB55002FFCC9 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		3D69EBE62D9970800056F87C /* AudioMonitorApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioMonitorApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3D9B79D92DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AudioMonitorWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		3D9B79EB2DF0885E00F528F3 /* Exceptions for "AudioMonitorWidgetExtension" folder in "AudioMonitorWidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3D9B79D82DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension */;
+		};
+		3DB70A8C2DD7DE6F0027C120 /* Exceptions for "AudiioMonitorApp" folder in "AudioMonitorApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				Widget/AudioMonitorWidget.swift,
+			);
+			target = 3D69EBE52D9970800056F87C /* AudioMonitorApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		3D62A1D72DEDFB55002FFCC9 /* us.govnago.AudiioMonitorApp.AudioMonitorWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = us.govnago.AudiioMonitorApp.AudioMonitorWidget;
+			sourceTree = "<group>";
+		};
+		3D62A1F22DEE0086002FFCC9 /* us.govnago.AudiioMonitorApp.AudioMonitorWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = us.govnago.AudiioMonitorApp.AudioMonitorWidget;
+			sourceTree = "<group>";
+		};
+		3D69EBE82D9970800056F87C /* AudiioMonitorApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3DB70A8C2DD7DE6F0027C120 /* Exceptions for "AudiioMonitorApp" folder in "AudioMonitorApp" target */,
+			);
+			path = AudiioMonitorApp;
+			sourceTree = "<group>";
+		};
+		3D9B79DC2DF0885D00F528F3 /* AudioMonitorWidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3D9B79EB2DF0885E00F528F3 /* Exceptions for "AudioMonitorWidgetExtension" folder in "AudioMonitorWidgetExtensionExtension" target */,
+			);
+			path = AudioMonitorWidgetExtension;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3D69EBE32D9970800056F87C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3D9B79D62DF0885D00F528F3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3D9B79DB2DF0885D00F528F3 /* SwiftUI.framework in Frameworks */,
+				3D9B79DA2DF0885D00F528F3 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3D62A1D22DEDFB55002FFCC9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				3D62A1D32DEDFB55002FFCC9 /* WidgetKit.framework */,
+				3D62A1D52DEDFB55002FFCC9 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		3D69EBDD2D9970800056F87C = {
+			isa = PBXGroup;
+			children = (
+				3D69EBE82D9970800056F87C /* AudiioMonitorApp */,
+				3D62A1D72DEDFB55002FFCC9 /* us.govnago.AudiioMonitorApp.AudioMonitorWidget */,
+				3D62A1F22DEE0086002FFCC9 /* us.govnago.AudiioMonitorApp.AudioMonitorWidget */,
+				3D9B79DC2DF0885D00F528F3 /* AudioMonitorWidgetExtension */,
+				3D62A1D22DEDFB55002FFCC9 /* Frameworks */,
+				3D69EBE72D9970800056F87C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		3D69EBE72D9970800056F87C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3D69EBE62D9970800056F87C /* AudioMonitorApp.app */,
+				3D9B79D92DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3D69EBE52D9970800056F87C /* AudioMonitorApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3D69EBF52D9970810056F87C /* Build configuration list for PBXNativeTarget "AudioMonitorApp" */;
+			buildPhases = (
+				3D69EBE22D9970800056F87C /* Sources */,
+				3D69EBE32D9970800056F87C /* Frameworks */,
+				3D69EBE42D9970800056F87C /* Resources */,
+				3D3F4A162DEF8BEC00FC2DEB /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3DF14FB22DEF85260039BAFE /* PBXTargetDependency */,
+				3DF14FB42DEF855E0039BAFE /* PBXTargetDependency */,
+				3DF14FB62DEF85960039BAFE /* PBXTargetDependency */,
+				3D3F4A152DEF8BEC00FC2DEB /* PBXTargetDependency */,
+				3D3F4A182DEF8C8100FC2DEB /* PBXTargetDependency */,
+				3D3F4A1A2DEF8CA400FC2DEB /* PBXTargetDependency */,
+				3D3F4A1C2DEF8D3600FC2DEB /* PBXTargetDependency */,
+				3D9B79E62DF0885E00F528F3 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				3D69EBE82D9970800056F87C /* AudiioMonitorApp */,
+			);
+			name = AudioMonitorApp;
+			packageProductDependencies = (
+			);
+			productName = AudiioMonitorApp;
+			productReference = 3D69EBE62D9970800056F87C /* AudioMonitorApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		3D9B79D82DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3D9B79E82DF0885E00F528F3 /* Build configuration list for PBXNativeTarget "AudioMonitorWidgetExtensionExtension" */;
+			buildPhases = (
+				3D9B79D52DF0885D00F528F3 /* Sources */,
+				3D9B79D62DF0885D00F528F3 /* Frameworks */,
+				3D9B79D72DF0885D00F528F3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3D9B79DC2DF0885D00F528F3 /* AudioMonitorWidgetExtension */,
+			);
+			name = AudioMonitorWidgetExtensionExtension;
+			packageProductDependencies = (
+			);
+			productName = AudioMonitorWidgetExtensionExtension;
+			productReference = 3D9B79D92DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		3D69EBDE2D9970800056F87C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1630;
+				LastUpgradeCheck = 1630;
+				TargetAttributes = {
+					3D69EBE52D9970800056F87C = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					3D9B79D82DF0885D00F528F3 = {
+						CreatedOnToolsVersion = 16.3;
+					};
+				};
+			};
+			buildConfigurationList = 3D69EBE12D9970800056F87C /* Build configuration list for PBXProject "AudiioMonitorApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 3D69EBDD2D9970800056F87C;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 3D69EBE72D9970800056F87C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3D69EBE52D9970800056F87C /* AudioMonitorApp */,
+				3D9B79D82DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3D69EBE42D9970800056F87C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3D9B79D72DF0885D00F528F3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3D69EBE22D9970800056F87C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3D9B79D52DF0885D00F528F3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3D3F4A152DEF8BEC00FC2DEB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			targetProxy = 3D3F4A142DEF8BEC00FC2DEB /* PBXContainerItemProxy */;
+		};
+		3D3F4A182DEF8C8100FC2DEB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			targetProxy = 3D3F4A172DEF8C8100FC2DEB /* PBXContainerItemProxy */;
+		};
+		3D3F4A1A2DEF8CA400FC2DEB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			targetProxy = 3D3F4A192DEF8CA400FC2DEB /* PBXContainerItemProxy */;
+		};
+		3D3F4A1C2DEF8D3600FC2DEB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			targetProxy = 3D3F4A1B2DEF8D3600FC2DEB /* PBXContainerItemProxy */;
+		};
+		3D9B79E62DF0885E00F528F3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3D9B79D82DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension */;
+			targetProxy = 3D9B79E52DF0885E00F528F3 /* PBXContainerItemProxy */;
+		};
+		3DF14FB22DEF85260039BAFE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			targetProxy = 3DF14FB12DEF85260039BAFE /* PBXContainerItemProxy */;
+		};
+		3DF14FB42DEF855E0039BAFE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			targetProxy = 3DF14FB32DEF855E0039BAFE /* PBXContainerItemProxy */;
+		};
+		3DF14FB62DEF85960039BAFE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			targetProxy = 3DF14FB52DEF85960039BAFE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		3D69EBF32D9970810056F87C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		3D69EBF42D9970810056F87C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		3D69EBF62D9970810056F87C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AudioMonitorApp/AudiioMonitorApp.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "\"AudioMonitorApp/Preview Content\"";
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AudioMonitorApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor ";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires access to the microphone to monitor audio levels.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "";
+			};
+			name = Debug;
+		};
+		3D69EBF72D9970810056F87C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AudioMonitorApp/AudiioMonitorApp.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "\"AudioMonitorApp/Preview Content\"";
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AudioMonitorApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor ";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires access to the microphone to monitor audio levels.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "";
+			};
+			name = Release;
+		};
+		3D9B79E92DF0885E00F528F3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AudioMonitorWidgetExtension/AudioMonitorWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AudioMonitorWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AudioMonitorWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp.AudioMonitorWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		3D9B79EA2DF0885E00F528F3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AudioMonitorWidgetExtension/AudioMonitorWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AudioMonitorWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AudioMonitorWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp.AudioMonitorWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3D69EBE12D9970800056F87C /* Build configuration list for PBXProject "AudiioMonitorApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3D69EBF32D9970810056F87C /* Debug */,
+				3D69EBF42D9970810056F87C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3D69EBF52D9970810056F87C /* Build configuration list for PBXNativeTarget "AudioMonitorApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3D69EBF62D9970810056F87C /* Debug */,
+				3D69EBF72D9970810056F87C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3D9B79E82DF0885E00F528F3 /* Build configuration list for PBXNativeTarget "AudioMonitorWidgetExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3D9B79E92DF0885E00F528F3 /* Debug */,
+				3D9B79EA2DF0885E00F528F3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 3D69EBDE2D9970800056F87C /* Project object */;
+}
