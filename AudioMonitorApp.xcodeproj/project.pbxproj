@@ -7,78 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3D9B79DA2DF0885D00F528F3 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D62A1D32DEDFB55002FFCC9 /* WidgetKit.framework */; };
-		3D9B79DB2DF0885D00F528F3 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D62A1D52DEDFB55002FFCC9 /* SwiftUI.framework */; };
-		3D9B79E72DF0885E00F528F3 /* AudioMonitorWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3D9B79D92DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3DDCBCFC2DF0A3DC00B433C1 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D62A1D32DEDFB55002FFCC9 /* WidgetKit.framework */; };
+		3DDCBCFD2DF0A3DC00B433C1 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D62A1D52DEDFB55002FFCC9 /* SwiftUI.framework */; };
+		3DDCBD092DF0A3DD00B433C1 /* AudioMonitorWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3DDCBCFB2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		3D3F4A142DEF8BEC00FC2DEB /* PBXContainerItemProxy */ = {
+		3DDCBD072DF0A3DD00B433C1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
-			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
-		};
-		3D3F4A172DEF8C8100FC2DEB /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
-			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
-		};
-		3D3F4A192DEF8CA400FC2DEB /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
-			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
-		};
-		3D3F4A1B2DEF8D3600FC2DEB /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
-			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
-		};
-		3D9B79E52DF0885E00F528F3 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3D9B79D82DF0885D00F528F3;
-			remoteInfo = AudioMonitorWidgetExtensionExtension;
-		};
-		3DF14FB12DEF85260039BAFE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
-			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
-		};
-		3DF14FB32DEF855E0039BAFE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
-			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
-		};
-		3DF14FB52DEF85960039BAFE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3D62A1EE2DEE0086002FFCC9;
-			remoteInfo = us.govango.AudiioMonitorApp.AudioMonitorWidgetExtension;
+			remoteGlobalIDString = 3DDCBCFA2DF0A3DC00B433C1;
+			remoteInfo = AudioMonitorWidgetExtension;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		3D3F4A162DEF8BEC00FC2DEB /* Embed Foundation Extensions */ = {
+		3DDCBD0E2DF0A3DD00B433C1 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				3D9B79E72DF0885E00F528F3 /* AudioMonitorWidgetExtensionExtension.appex in Embed Foundation Extensions */,
+				3DDCBD092DF0A3DD00B433C1 /* AudioMonitorWidgetExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -89,52 +40,48 @@
 		3D62A1D32DEDFB55002FFCC9 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		3D62A1D52DEDFB55002FFCC9 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		3D69EBE62D9970800056F87C /* AudioMonitorApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioMonitorApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		3D9B79D92DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AudioMonitorWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		3DA40EC32DF09B1700BE1354 /* AudioMonitorApp.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = AudioMonitorApp.xcodeproj; sourceTree = SOURCE_ROOT; };
+		3DDCBCFB2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AudioMonitorWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		3D9B79EB2DF0885E00F528F3 /* Exceptions for "AudioMonitorWidgetExtension" folder in "AudioMonitorWidgetExtensionExtension" target */ = {
+		3D5B75972DF0C4BC0091EDEA /* Exceptions for "AudioMonitorApp" folder in "AudioMonitorApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-			);
-			target = 3D9B79D82DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension */;
-		};
-		3DB70A8C2DD7DE6F0027C120 /* Exceptions for "AudiioMonitorApp" folder in "AudioMonitorApp" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-				Widget/AudioMonitorWidget.swift,
+				"Readme/AudioMonitorApp structure.md",
 			);
 			target = 3D69EBE52D9970800056F87C /* AudioMonitorApp */;
+		};
+		3DDCBD0A2DF0A3DD00B433C1 /* Exceptions for "AudioMonitorWidget" folder in "AudioMonitorWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3DDCBCFA2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3D62A1D72DEDFB55002FFCC9 /* us.govnago.AudiioMonitorApp.AudioMonitorWidget */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = us.govnago.AudiioMonitorApp.AudioMonitorWidget;
-			sourceTree = "<group>";
-		};
-		3D62A1F22DEE0086002FFCC9 /* us.govnago.AudiioMonitorApp.AudioMonitorWidget */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = us.govnago.AudiioMonitorApp.AudioMonitorWidget;
-			sourceTree = "<group>";
-		};
-		3D69EBE82D9970800056F87C /* AudiioMonitorApp */ = {
+		3D69EBE82D9970800056F87C /* AudioMonitorApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				3DB70A8C2DD7DE6F0027C120 /* Exceptions for "AudiioMonitorApp" folder in "AudioMonitorApp" target */,
+				3D5B75972DF0C4BC0091EDEA /* Exceptions for "AudioMonitorApp" folder in "AudioMonitorApp" target */,
 			);
-			path = AudiioMonitorApp;
+			path = AudioMonitorApp;
 			sourceTree = "<group>";
 		};
 		3D9B79DC2DF0885D00F528F3 /* AudioMonitorWidgetExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				3D9B79EB2DF0885E00F528F3 /* Exceptions for "AudioMonitorWidgetExtension" folder in "AudioMonitorWidgetExtensionExtension" target */,
-			);
 			path = AudioMonitorWidgetExtension;
+			sourceTree = "<group>";
+		};
+		3DDCBCFE2DF0A3DD00B433C1 /* AudioMonitorWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3DDCBD0A2DF0A3DD00B433C1 /* Exceptions for "AudioMonitorWidget" folder in "AudioMonitorWidgetExtension" target */,
+			);
+			path = AudioMonitorWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -147,12 +94,12 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		3D9B79D62DF0885D00F528F3 /* Frameworks */ = {
+		3DDCBCF82DF0A3DC00B433C1 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3D9B79DB2DF0885D00F528F3 /* SwiftUI.framework in Frameworks */,
-				3D9B79DA2DF0885D00F528F3 /* WidgetKit.framework in Frameworks */,
+				3DDCBCFD2DF0A3DC00B433C1 /* SwiftUI.framework in Frameworks */,
+				3DDCBCFC2DF0A3DC00B433C1 /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -171,10 +118,10 @@
 		3D69EBDD2D9970800056F87C = {
 			isa = PBXGroup;
 			children = (
-				3D69EBE82D9970800056F87C /* AudiioMonitorApp */,
-				3D62A1D72DEDFB55002FFCC9 /* us.govnago.AudiioMonitorApp.AudioMonitorWidget */,
-				3D62A1F22DEE0086002FFCC9 /* us.govnago.AudiioMonitorApp.AudioMonitorWidget */,
+				3DA40EC32DF09B1700BE1354 /* AudioMonitorApp.xcodeproj */,
+				3D69EBE82D9970800056F87C /* AudioMonitorApp */,
 				3D9B79DC2DF0885D00F528F3 /* AudioMonitorWidgetExtension */,
+				3DDCBCFE2DF0A3DD00B433C1 /* AudioMonitorWidget */,
 				3D62A1D22DEDFB55002FFCC9 /* Frameworks */,
 				3D69EBE72D9970800056F87C /* Products */,
 			);
@@ -184,8 +131,13 @@
 			isa = PBXGroup;
 			children = (
 				3D69EBE62D9970800056F87C /* AudioMonitorApp.app */,
-				3D9B79D92DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension.appex */,
+				3DDCBCFB2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension.appex */,
 			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3DDCBCF52DF0A07200B433C1 /* Products */ = {
+			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -199,22 +151,15 @@
 				3D69EBE22D9970800056F87C /* Sources */,
 				3D69EBE32D9970800056F87C /* Frameworks */,
 				3D69EBE42D9970800056F87C /* Resources */,
-				3D3F4A162DEF8BEC00FC2DEB /* Embed Foundation Extensions */,
+				3DDCBD0E2DF0A3DD00B433C1 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				3DF14FB22DEF85260039BAFE /* PBXTargetDependency */,
-				3DF14FB42DEF855E0039BAFE /* PBXTargetDependency */,
-				3DF14FB62DEF85960039BAFE /* PBXTargetDependency */,
-				3D3F4A152DEF8BEC00FC2DEB /* PBXTargetDependency */,
-				3D3F4A182DEF8C8100FC2DEB /* PBXTargetDependency */,
-				3D3F4A1A2DEF8CA400FC2DEB /* PBXTargetDependency */,
-				3D3F4A1C2DEF8D3600FC2DEB /* PBXTargetDependency */,
-				3D9B79E62DF0885E00F528F3 /* PBXTargetDependency */,
+				3DDCBD082DF0A3DD00B433C1 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3D69EBE82D9970800056F87C /* AudiioMonitorApp */,
+				3D69EBE82D9970800056F87C /* AudioMonitorApp */,
 			);
 			name = AudioMonitorApp;
 			packageProductDependencies = (
@@ -223,26 +168,26 @@
 			productReference = 3D69EBE62D9970800056F87C /* AudioMonitorApp.app */;
 			productType = "com.apple.product-type.application";
 		};
-		3D9B79D82DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension */ = {
+		3DDCBCFA2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3D9B79E82DF0885E00F528F3 /* Build configuration list for PBXNativeTarget "AudioMonitorWidgetExtensionExtension" */;
+			buildConfigurationList = 3DDCBD0B2DF0A3DD00B433C1 /* Build configuration list for PBXNativeTarget "AudioMonitorWidgetExtension" */;
 			buildPhases = (
-				3D9B79D52DF0885D00F528F3 /* Sources */,
-				3D9B79D62DF0885D00F528F3 /* Frameworks */,
-				3D9B79D72DF0885D00F528F3 /* Resources */,
+				3DDCBCF72DF0A3DC00B433C1 /* Sources */,
+				3DDCBCF82DF0A3DC00B433C1 /* Frameworks */,
+				3DDCBCF92DF0A3DC00B433C1 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				3D9B79DC2DF0885D00F528F3 /* AudioMonitorWidgetExtension */,
+				3DDCBCFE2DF0A3DD00B433C1 /* AudioMonitorWidget */,
 			);
-			name = AudioMonitorWidgetExtensionExtension;
+			name = AudioMonitorWidgetExtension;
 			packageProductDependencies = (
 			);
-			productName = AudioMonitorWidgetExtensionExtension;
-			productReference = 3D9B79D92DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension.appex */;
+			productName = AudioMonitorWidgetExtension;
+			productReference = 3DDCBCFB2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -258,12 +203,12 @@
 					3D69EBE52D9970800056F87C = {
 						CreatedOnToolsVersion = 16.2;
 					};
-					3D9B79D82DF0885D00F528F3 = {
+					3DDCBCFA2DF0A3DC00B433C1 = {
 						CreatedOnToolsVersion = 16.3;
 					};
 				};
 			};
-			buildConfigurationList = 3D69EBE12D9970800056F87C /* Build configuration list for PBXProject "AudiioMonitorApp" */;
+			buildConfigurationList = 3D69EBE12D9970800056F87C /* Build configuration list for PBXProject "AudioMonitorApp" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -275,10 +220,16 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3D69EBE72D9970800056F87C /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 3DDCBCF52DF0A07200B433C1 /* Products */;
+					ProjectRef = 3DA40EC32DF09B1700BE1354 /* AudioMonitorApp.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				3D69EBE52D9970800056F87C /* AudioMonitorApp */,
-				3D9B79D82DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension */,
+				3DDCBCFA2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -291,7 +242,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		3D9B79D72DF0885D00F528F3 /* Resources */ = {
+		3DDCBCF92DF0A3DC00B433C1 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -308,7 +259,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		3D9B79D52DF0885D00F528F3 /* Sources */ = {
+		3DDCBCF72DF0A3DC00B433C1 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -318,38 +269,10 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		3D3F4A152DEF8BEC00FC2DEB /* PBXTargetDependency */ = {
+		3DDCBD082DF0A3DD00B433C1 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			targetProxy = 3D3F4A142DEF8BEC00FC2DEB /* PBXContainerItemProxy */;
-		};
-		3D3F4A182DEF8C8100FC2DEB /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			targetProxy = 3D3F4A172DEF8C8100FC2DEB /* PBXContainerItemProxy */;
-		};
-		3D3F4A1A2DEF8CA400FC2DEB /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			targetProxy = 3D3F4A192DEF8CA400FC2DEB /* PBXContainerItemProxy */;
-		};
-		3D3F4A1C2DEF8D3600FC2DEB /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			targetProxy = 3D3F4A1B2DEF8D3600FC2DEB /* PBXContainerItemProxy */;
-		};
-		3D9B79E62DF0885E00F528F3 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 3D9B79D82DF0885D00F528F3 /* AudioMonitorWidgetExtensionExtension */;
-			targetProxy = 3D9B79E52DF0885E00F528F3 /* PBXContainerItemProxy */;
-		};
-		3DF14FB22DEF85260039BAFE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			targetProxy = 3DF14FB12DEF85260039BAFE /* PBXContainerItemProxy */;
-		};
-		3DF14FB42DEF855E0039BAFE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			targetProxy = 3DF14FB32DEF855E0039BAFE /* PBXContainerItemProxy */;
-		};
-		3DF14FB62DEF85960039BAFE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			targetProxy = 3DF14FB52DEF85960039BAFE /* PBXContainerItemProxy */;
+			target = 3DDCBCFA2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension */;
+			targetProxy = 3DDCBD072DF0A3DD00B433C1 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -416,6 +339,7 @@
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
@@ -473,6 +397,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -481,7 +406,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = AudioMonitorApp/AudiioMonitorApp.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AudioMonitorApp/AudioMonitorApp.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -509,7 +434,7 @@
 				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "";
 			};
 			name = Debug;
@@ -519,7 +444,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = AudioMonitorApp/AudiioMonitorApp.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AudioMonitorApp/AudioMonitorApp.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -547,24 +472,24 @@
 				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "";
 			};
 			name = Release;
 		};
-		3D9B79E92DF0885E00F528F3 /* Debug */ = {
+		3DDCBD0C2DF0A3DD00B433C1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = AudioMonitorWidgetExtension/AudioMonitorWidgetExtension.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AudioMonitorWidget/AudioMonitorWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = SYJ72F7Z55;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = AudioMonitorWidgetExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = AudioMonitorWidgetExtension;
+				INFOPLIST_FILE = AudioMonitorWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -573,28 +498,28 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp.AudioMonitorWidgetExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp.AudioMonitorWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
-		3D9B79EA2DF0885E00F528F3 /* Release */ = {
+		3DDCBD0D2DF0A3DD00B433C1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = AudioMonitorWidgetExtension/AudioMonitorWidgetExtension.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AudioMonitorWidget/AudioMonitorWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = SYJ72F7Z55;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = AudioMonitorWidgetExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = AudioMonitorWidgetExtension;
+				INFOPLIST_FILE = AudioMonitorWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -603,19 +528,19 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp.AudioMonitorWidgetExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp.AudioMonitorWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		3D69EBE12D9970800056F87C /* Build configuration list for PBXProject "AudiioMonitorApp" */ = {
+		3D69EBE12D9970800056F87C /* Build configuration list for PBXProject "AudioMonitorApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3D69EBF32D9970810056F87C /* Debug */,
@@ -633,11 +558,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3D9B79E82DF0885E00F528F3 /* Build configuration list for PBXNativeTarget "AudioMonitorWidgetExtensionExtension" */ = {
+		3DDCBD0B2DF0A3DD00B433C1 /* Build configuration list for PBXNativeTarget "AudioMonitorWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				3D9B79E92DF0885E00F528F3 /* Debug */,
-				3D9B79EA2DF0885E00F528F3 /* Release */,
+				3DDCBD0C2DF0A3DD00B433C1 /* Debug */,
+				3DDCBD0D2DF0A3DD00B433C1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

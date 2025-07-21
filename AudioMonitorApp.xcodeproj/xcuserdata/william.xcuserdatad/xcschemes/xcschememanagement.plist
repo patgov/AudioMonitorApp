@@ -4,10 +4,17 @@
 <dict>
 	<key>SchemeUserState</key>
 	<dict>
-		<key>AudiioMonitorApp.xcscheme_^#shared#^_</key>
+		<key>AudioMonitorApp.xcscheme_^#shared#^_</key>
 		<dict>
+			<key>isShown</key>
+			<true/>
 			<key>orderHint</key>
 			<integer>0</integer>
+		</dict>
+		<key>AudioMonitorWidgetExtension.xcscheme_^#shared#^_</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>1</integer>
 		</dict>
 		<key>AudioMonitorWidgetExtensionExtension.xcscheme_^#shared#^_</key>
 		<dict>
@@ -33,6 +40,11 @@
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
 		<key>3D69EBE52D9970800056F87C</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>3DDCBCFA2DF0A3DC00B433C1</key>
 		<dict>
 			<key>primary</key>
 			<true/>
