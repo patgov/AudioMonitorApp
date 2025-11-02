@@ -67,9 +67,13 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     private var meterFormat: AVAudioFormat? = nil
 #if os(macOS)
         /// Do NOT force the macOS System Settings default input to our selection unless explicitly enabled.
-    private var forceSystemDefaultToSelected = false
+    private var forceSystemDefaultToSelected = true
         /// Tracks whether we've registered a listener for default input changes.
     private var defaultListenerInstalled = false
+        /// Prevent recursive/default-switch feedback loops
+    private var isSwitchingDefaultInput = false
+        /// Current snapshot of available input devices (computed on demand)
+    private var inputDevices: [InputAudioDevice] { enumerateInputDevices() }
 #endif
     
     public var isRunning: Bool { engine.isRunning }
@@ -107,6 +111,13 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                             self.engine.inputNode.removeTap(onBus: 0)
                             self.tapInstalled = false
                         }
+#if os(macOS)
+                        if self.forceSystemDefaultToSelected,
+                           let def = self.systemDefaultInputDevice(),
+                           def.id != device.id {
+                            self.switchDefaultInputToSelected()
+                        }
+#endif
                         self.startEngine()
                     }
                 }
@@ -214,7 +225,23 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         
             // Tear down any previous tap/graph safely
         if engine.isRunning { engine.stop() }
+            //#if os(macOS)
+#if os(macOS)
+        if forceSystemDefaultToSelected,
+           let def = systemDefaultInputDevice(),
+           def.id != selectedDevice.id {
+            switchDefaultInputToSelected()
+        }
+#endif
         let input = engine.inputNode
+            // Validate that the current input node exposes at least 1 input channel
+        let probeFormat = input.inputFormat(forBus: 0)
+        if probeFormat.channelCount == 0 {
+            logger.error("❌ Input node reports 0 channels — scheduling retry")
+                // Defer a retry to allow HAL to settle after a route change
+            scheduleTapRetry(reason: "zero-channel input")
+            return
+        }
         input.removeTap(onBus: 0)
         tapInstalled = false
         
@@ -280,11 +307,13 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     }
     
 #if os(macOS)
-        /// Returns the current system default input device's volume scalar in [0,1], if available.
-    private func currentInputDeviceVolumeScalar() -> Float? {
-        guard let dev = systemDefaultInputDevice()?.id else { return nil }
-        var vol: Float32 = 0
-        var size = UInt32(MemoryLayout<Float32>.size)
+        /// Returns the selected input device's input volume scalar in [0,1], if available.
+        /// If the device does not expose a volume scalar, returns nil so metering proceeds normally.
+    private func currentSelectedInputDeviceVolumeScalar() -> Float? {
+        let dev = selectedDevice.id
+        guard dev != 0 else { return nil }
+        let vol: Float32 = 0
+        let size = UInt32(MemoryLayout<Float32>.size)
         
         func readVolume(element: UInt32) -> Float32? {
             var addr = AudioObjectPropertyAddress(
@@ -299,7 +328,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         }
         
             // Try master first, then channel 1
-        if let master = readVolume(element: kAudioObjectPropertyElementMaster) { return master }
+        if let master = readVolume(element: kAudioObjectPropertyElementMain) { return master }
         if let ch1 = readVolume(element: 1) { return ch1 }
         return nil
     }
@@ -314,8 +343,8 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             guard buffer.frameLength > 0 else { return }
             
 #if os(macOS)
-            if let vol = self.currentInputDeviceVolumeScalar(), vol <= 0.01 {
-                    // System input volume is effectively zero — treat as silence
+            if let vol = self.currentSelectedInputDeviceVolumeScalar(), vol <= 0.01 {
+                    // Selected input's volume is effectively zero — treat as silence
                 DispatchQueue.main.async { [weak self] in self?.processLevels(left: -120, right: -120) }
                 return
             }
@@ -567,17 +596,29 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         var ids = [AudioObjectID](repeating: 0, count: count)
         guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &dataSize, &ids) == noErr else { return [] }
         
-        func deviceHasInput(_ id: AudioObjectID) -> Bool {
+        func inputChannelCount(_ id: AudioObjectID) -> UInt32 {
             var streamAddr = AudioObjectPropertyAddress(
                 mSelector: kAudioDevicePropertyStreamConfiguration,
                 mScope: kAudioObjectPropertyScopeInput,
                 mElement: kAudioObjectPropertyElementMain
             )
             var size: UInt32 = 0
-            guard AudioObjectGetPropertyDataSize(id, &streamAddr, 0, nil, &size) == noErr, size > 0 else { return false }
+            guard AudioObjectGetPropertyDataSize(id, &streamAddr, 0, nil, &size) == noErr, size > 0 else { return 0 }
             let buf = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<Int8>.alignment)
             defer { buf.deallocate() }
-            return AudioObjectGetPropertyData(id, &streamAddr, 0, nil, &size, buf) == noErr && buf.bindMemory(to: AudioBufferList.self, capacity: 1).pointee.mNumberBuffers > 0
+            guard AudioObjectGetPropertyData(id, &streamAddr, 0, nil, &size, buf) == noErr else { return 0 }
+            let abl = buf.bindMemory(to: AudioBufferList.self, capacity: 1).pointee
+            var total: UInt32 = 0
+            for i in 0..<Int(abl.mNumberBuffers) {
+                let b = withUnsafePointer(to: abl) { ptr -> AudioBuffer in
+                    let listPtr = UnsafeMutablePointer(mutating: ptr)
+                    return listPtr.withMemoryRebound(to: AudioBuffer.self, capacity: Int(abl.mNumberBuffers)) { reb in
+                        return reb[i]
+                    }
+                }
+                total += b.mNumberChannels
+            }
+            return total
         }
         
         func deviceName(_ id: AudioObjectID) -> String {
@@ -595,9 +636,11 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         }
         
         var result: [InputAudioDevice] = []
-        for id in ids where deviceHasInput(id) {
+        for id in ids {
+            let ch = inputChannelCount(id)
+            guard ch > 0 else { continue }
             let name = deviceName(id)
-            result.append(InputAudioDevice(id: id, name: name, channelCount: 2))
+            result.append(InputAudioDevice(id: id, name: name, channelCount: UInt32(Int(ch))))
         }
         return result
     }
@@ -634,19 +677,31 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.refreshInputDevices()
-                if let def = self.systemDefaultInputDevice() {
-                    self.selectedDevice = def
-                    self.selectedInputDeviceSubject.send(def)
-                    self.logger.info("🔔 System default input changed → adopting: \(def.name) [id: \(def.id)]")
-                        // Restart engine permission‑aware to retarget input node and reinstall the tap
-                    self.pendingTapRetry?.cancel(); self.pendingTapRetry = nil
-                    self.tapRetryCount = 0
-                    self.verifyMicPermissionThen { [weak self] in
-                        guard let self = self else { return }
-                        if self.engine.isRunning { self.engine.stop() }
-                        if self.tapInstalled { self.engine.inputNode.removeTap(onBus: 0); self.tapInstalled = false }
-                        if !self.isStarting { self.startEngine() }
+                guard let def = self.systemDefaultInputDevice() else { return }
+#if os(macOS)
+                if self.forceSystemDefaultToSelected,
+                   self.selectedDevice.id != 0 {
+                    if def.id != self.selectedDevice.id {
+                            // External change detected while we pin system default to our selection → revert system default
+                        self.switchDefaultInputToSelected()
+                        self.logger.info("🔔 System default input changed externally → reverting to selected: \(self.selectedDevice.name) [id: \(self.selectedDevice.id)]")
                     }
+                        // Either way, when forcing, do not adopt the external default.
+                    return
+                }
+#endif
+                    // Not forcing: adopt the new system default
+                self.selectedDevice = def
+                self.selectedInputDeviceSubject.send(def)
+                self.logger.info("🔔 System default input changed → adopting: \(def.name) [id: \(def.id)]")
+                    // Restart engine permission‑aware to retarget input node and reinstall the tap
+                self.pendingTapRetry?.cancel(); self.pendingTapRetry = nil
+                self.tapRetryCount = 0
+                self.verifyMicPermissionThen { [weak self] in
+                    guard let self = self else { return }
+                    if self.engine.isRunning { self.engine.stop() }
+                    if self.tapInstalled { self.engine.inputNode.removeTap(onBus: 0); self.tapInstalled = false }
+                    if !self.isStarting { self.startEngine() }
                 }
             }
         }
@@ -715,25 +770,35 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         return InputAudioDevice(id: devID, name: name, channelCount: 2)
     }
     
+    
+    
     private func switchDefaultInputToSelected() {
-        guard selectedDevice != .none else { return }
+        let sel = selectedDevice
+            // Do not attempt to switch if selection is a placeholder or unknown
+        if sel.id == 0 { return }
+            // Ensure we only act if the device is in our current list
+        if !self.inputDevices.contains(where: { $0.id == sel.id }) { return }
+            // Reentrancy guard
+        if isSwitchingDefaultInput { return }
+        isSwitchingDefaultInput = true
+        defer { isSwitchingDefaultInput = false }
+            // Check current default to avoid redundant sets
+        guard let def = systemDefaultInputDevice(), def.id != sel.id else {
+            logger.debug("🔁 System default already \(sel.name) [id: \(sel.id)] — no switch needed")
+            return
+        }
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain)
-        var dev = selectedDevice.id
-        let size = UInt32(MemoryLayout<AudioObjectID>.size)
-        let st = AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, size, &dev)
-        if st == noErr {
-            logger.info("🔀 Default input set to \(self.selectedDevice.name) [id: \(self.selectedDevice.id)]")
+        var newID = sel.id
+        let status = AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, UInt32(MemoryLayout<AudioObjectID>.size), &newID)
+        let safeName = sel.name, safeId = sel.id
+        if status == noErr {
+            logger.info("🔀 Default input set to \(safeName) [id: \(safeId)]")
         } else {
-            logger.error("❌ Could not set default input (\(st))")
+            logger.error("❌ Failed to set default input to \(safeName) [id: \(safeId)], status=\(status)")
         }
-        
-    #if os(macOS)
-            if forceSystemDefaultToSelected { self.switchDefaultInputToSelected() }
-    #endif
-        
     }
 #endif
     
