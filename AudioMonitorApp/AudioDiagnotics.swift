@@ -2,13 +2,13 @@ import Foundation
 import AVFoundation
 
 enum AudioDiagnostics {
-    
+
     static let silenceThreshold: Float = -50.0
     static let overmodulationThreshold: Float = -2.0
-    
+
     static func silenceThresholdLabel() -> String { "Silence threshold = \(silenceThreshold) dB" }
     static func overmodulationThresholdLabel() -> String { "Overmodulation threshold = \(overmodulationThreshold) dB" }
-    
+
     @MainActor static func warnIfMonoDeviceSelected(_ device: InputAudioDevice?, logger: LogManager?) {
         guard let device = device, device != .none else { return }
         if device.channelCount < 2 {
@@ -16,7 +16,7 @@ enum AudioDiagnostics {
             print("⚠️ Warning: Mono input device selected: \(device.name)")
         }
     }
-    
+
     @MainActor static func analyzeSilence(level: Float, threshold: Float, channels: Int, device: InputAudioDevice?, logger: LogManager?) {
         warnIfMonoDeviceSelected(device, logger: logger)
         if level.isNaN {
@@ -32,7 +32,7 @@ enum AudioDiagnostics {
             print("🔍 Silence detected: level = \(level)")
         }
     }
-    
+
     @MainActor static func analyzeOvermodulation(level: Float, threshold: Float, channels: Int, device: InputAudioDevice?, logger: LogManager?) {
         warnIfMonoDeviceSelected(device, logger: logger)
         if level.isNaN {
@@ -55,19 +55,24 @@ enum AudioDiagnostics {
 
 
 enum AudioDiagnosticsTools{
-    
+
     static func calculateRMS(from channel: UnsafePointer<Float>, frameLength: Int) -> Float {
         let sumSquares = (0..<frameLength).map { channel[$0] * channel[$0] }.reduce(0, +)
         let rms = sqrt(sumSquares / Float(frameLength))
         return max(-80.0, 20 * log10(rms))
     }
-    
+
     static func calculatePeak(from channel: UnsafePointer<Float>, frameLength: Int) -> Float {
         return (0..<frameLength).map { abs(channel[$0]) }.max() ?? 0.0
     }
-    
+
     static func analyzeSilence(level: Float, threshold: Float) -> Bool {
         return level < threshold
+    }
+
+    @MainActor static func exampleAnalyze(level: Float, threshold: Float, channels: Int, device: InputAudioDevice?, logger: LogManager?) async {
+        AudioDiagnostics.analyzeSilence(level: level, threshold: threshold, channels: channels, device: device, logger: logger)
+        AudioDiagnostics.analyzeOvermodulation(level: level, threshold: threshold, channels: channels, device: device, logger: logger)
     }
 }
 
@@ -85,7 +90,7 @@ struct AudioDiagnosticsEngine: Identifiable, Codable {
     let channel: Int
     let value: Float
     let level: DiagnosticLevel
-    
+
     init(timestamp: Date = Date(), message: String, channel: Int, value: Float, level: DiagnosticLevel) {
         self.timestamp = timestamp
         self.message = message
@@ -94,3 +99,19 @@ struct AudioDiagnosticsEngine: Identifiable, Codable {
         self.level = level
     }
 }
+
+
+    // Example usage (safe from any context)
+@MainActor func runDiagnosticsExample() {
+    let testLevel: Float = -60.0
+    let threshold: Float = -50.0
+    let channels = 1
+        // Use `id:` and wrap the literal in AudioObjectID(...)
+    let dummyDevice = InputAudioDevice(id: AudioObjectID(1234), name: "Built-in Mic", channelCount: 1)
+    let dummyLogger: LogManager? = nil
+    
+    Task { @MainActor in
+        await AudioDiagnosticsTools.exampleAnalyze(level: testLevel, threshold: threshold, channels: channels, device: dummyDevice, logger: dummyLogger)
+    }
+}
+

@@ -40,7 +40,8 @@ struct LogViewerView: View {
 }
 
 #Preview {
-    let dummyLogManager = LogManager(audioManager: AudioManager())
+    let dummyAudioManager: AudioManagerProtocol = AudioManager()
+    let dummyLogManager = LogManager(audioManager: dummyAudioManager)
    // dummyLogManager.addInfo(message: "Preview log message", channel: 0, value: -42.5)
     LogViewerView(logManager: dummyLogManager)
 }

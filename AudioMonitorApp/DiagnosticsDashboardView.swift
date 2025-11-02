@@ -8,17 +8,17 @@ import SwiftUI
 struct DiagnosticsDashboardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let defaultID = InputAudioDevice.fetchDefaultInputDeviceID(),
-               let match = InputAudioDevice.fetchAvailableDevices().first(where: { $0.audioObjectID == defaultID && $0.isValid }) {
+            let defaultID = AudioDeviceHelpers.defaultInputDeviceID()
+            let devices = AudioDeviceHelpers.availableInputDevices()   // <- get actual devices
+            
+            if let def = defaultID,
+               let match = devices.first(where: { $0.id == def }) {    // <- compare by `id`
                 Text("🎧 Using: \(match.name)")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            
                 // ... rest of your dashboard UI ...
         }
     }
-}
-
-#Preview {
-    DiagnosticsDashboardView()
 }

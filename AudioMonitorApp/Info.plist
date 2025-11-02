@@ -4,11 +4,9 @@
 <dict>
 	<key>BuildDate</key>
 	<string>2025-05-15</string>
-<key>NSExtension</key>
-<dict>
-    <key>NSExtensionPointIdentifier</key>
-    <string>com.apple.widgetkit-extension</string>
-    <key>NSExtensionPrincipalClass</key>
-    <string>$(PRODUCT_MODULE_NAME).AudioMonitorWidget</string>
+	<key>CFBundleSignature</key>
+	<string></string>
+	<key>NSExtension</key>
+	<dict/>
 </dict>
 </plist>

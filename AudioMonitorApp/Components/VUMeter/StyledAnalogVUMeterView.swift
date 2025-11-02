@@ -15,21 +15,22 @@ struct StyledAnalogVUMeterView: View {
     private let maxDB: Float = 3
     
     private let ticks: [(label: String, dbfs: Float)] = [
-        ("-20", -40), ("-15", -35), ("-10", -30), ("-7", -27),
-        ("-3", -23), ("0", -20), ("+1", -19), ("+2", -18), ("+3", -17)
+        ("-20", -20), ("-15", -15), ("-10", -10), ("-7", -7),
+        ("-5", -5), ("-3", -3), ("0", 0), ("+1", 1), ("+2", 2), ("+3", 3)
     ]
     
     private func angle(for level: Float) -> Angle {
-        let adjusted = dbfsToVU(level + calibrationOffset)
+        let adjusted = level + calibrationOffset
         let clamped = max(min(adjusted, maxDB), minDB)
         let ratio = Double((clamped - minDB) / (maxDB - minDB))
-        return .degrees(-180 + ratio * 180)
+        return .degrees(-120 + ratio * 240) // center 0 VU
     }
     
         /// Helper to compute angle in degrees for a given dB value (VU scale)
     private func angle(forDB dB: Float) -> Double {
-        let ratio = (dB - minDB) / (maxDB - minDB)
-        return -180 + Double(ratio * 180)
+        let clamped = max(min(dB, maxDB), minDB)
+        let ratio = (clamped - minDB) / (maxDB - minDB)
+        return -120 + Double(ratio * 240) // center 0 VU
     }
     
     var body: some View {
@@ -76,8 +77,11 @@ struct StyledAnalogVUMeterView: View {
                     }
                     
                         // Needle
-                    let needleDB = leftLevel + calibrationOffset
-                    let clampedLevel = max(needleDB, minDB)
+                        // Determine whether to use average or single channel for mono
+                    let isMonoInput = leftLevel == rightLevel
+                    let displayedLevel = isMonoInput ? leftLevel : (leftLevel + rightLevel) / 2
+                    let needleDB = displayedLevel + calibrationOffset
+                    let clampedLevel = max(min(needleDB, maxDB), minDB)
                     let needleAngle = angle(for: clampedLevel)
                     Capsule()
                         .fill(Color.red)
@@ -100,50 +104,14 @@ struct StyledAnalogVUMeterView: View {
 }
 
 
+
 #if DEBUG
 struct StyledAnalogVUMeterView_Previews: PreviewProvider {
     static var previews: some View {
-        let testLevel: Float = -12.0
-        return StatefulPreviewWrapper(testLevel) { level in
-            HStack {
-                
-                
-                VStack {
-                    ZStack {
-                        StyledAnalogVUMeterView(leftLevel: level.wrappedValue, rightLevel: level.wrappedValue)
-                            //Left
-                        VStack {
-                            Text("VU Meter")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text("L")
-                                .font(.caption)
-                                .foregroundColor(.black)
-                        }
-                        .padding(.top, 50)
-                    }
-                }
-                .frame(width: 160, height: 160)
-                
-                VStack {
-                    ZStack {
-                        StyledAnalogVUMeterView(leftLevel: level.wrappedValue, rightLevel: level.wrappedValue)
-                            //Right
-                        VStack {
-                            Text("VU Meter")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text("R")
-                                .font(.caption)
-                                .foregroundColor(.black)
-                            
-                        }
-                        .padding(.top, 50)
-                    }
-                }
-                .frame(width: 160, height: 160)
-            }
-            
+        Group {
+            StyledAnalogVUMeterView(leftLevel: -6.0, rightLevel: -6.0)
+                .frame(width: 180, height: 180)
+                .previewDisplayName("App VU Meter Preview")
         }
     }
 }

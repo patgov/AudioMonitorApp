@@ -38,7 +38,7 @@ struct VUMeterNeedleView: View {
                 path.move(to: tickStart)
                 path.addLine(to: tickEnd)
             }
-            .stroke(tickColor, lineWidth: isMajor ? 1.5 : 1)
+         .stroke(tickColor, lineWidth: isMajor ? 1.5 : 1)
             
             if isMajor {
                 Text(db == 0 ? "0" : String(format: "%+.0f", db))
@@ -66,70 +66,61 @@ struct VUMeterNeedleView: View {
             let extraPositiveTicks: [Float] = [1, 2, 3]
             let majorTicks = Set((majorTickBase + extraPositiveTicks).sorted())
             
-                //   DispatchQueue.main.async {
-                //       print("🔁 VUMeterNeedleView – level:", level, "clamped:", clampedLevel, "normalized:", normalized)
-                //       print("🧭 Needle angle in degrees:", angle.degrees)
-                //  }
             
-            ZStack {
+           ZStack {
                 LinearGradient(
                     gradient: Gradient(colors: [Color.black, Color.gray.opacity(0.7)]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                
-                    // Background Arc
-                ArcShape(startAngle: .degrees(-165), endAngle: .degrees(10), clockwise: false)
-                    .stroke(Color.gray.opacity(0.3), lineWidth: 2)
-                    .frame(width: radius * 5, height: radius)
-                    .offset(y: -radius - 10)
-                    .position(center)
-                
-                    // Tick Marks and Labels
+               
                 ZStack {
                     ForEach(fineTicks, id: \.self) { db in
                         tickMarkView(for: db, center: center, radius: radius, isMajor: majorTicks.contains(db))
                     }
                 }
-                
+               
                     // Needle
-                Rectangle()
-                    .fill(LinearGradient(
-                        gradient: Gradient(colors: [Color(red: 1.0, green: 0.4, blue: 0.0), Color(red: 0.6, green: 0.0, blue: 0.0)]),
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ))
-                    .frame(width: 3, height: radius)
-                    .offset(y: -radius / 2)
-                    .rotationEffect(angle)
-                    .position(x: center.x, y: center.y)
-                    .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
-                    // .rotationEffect(.degrees(-30))
-                
-                    // Pivot circle
-                Circle()
+              Rectangle()
+                  .fill(LinearGradient(
+                      gradient: Gradient(colors: [Color(red: 1.0, green: 0.4, blue: 0.0), Color(red: 0.6, green: 0.0, blue: 0.0)]),
+                       startPoint: .top,
+                       endPoint: .bottom
+                   ))
+                        .frame(width: 3, height: radius)
+                        .offset(y: -radius / 2)
+                        .rotationEffect(angle)
+                        .position(x: center.x, y: center.y)
+                        .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+                       
+               
+               //adjust center point
+                    .rotationEffect(.degrees(-5))
+               
+                   // Pivot circle
+             Circle()
                     .fill(Color.white)
                     .frame(width: 10, height: 10)
                     .overlay(Circle().stroke(Color.black, lineWidth: 1))
                     .position(center)
                 
-                    // Label
+                  // Label
                 Text(label)
                     .font(.caption)
                     .foregroundColor(.white)
                     .position(x: center.x, y: center.y + radius * 0.7)
-                
-                    // Reflective overlay for glass look
+               
+                   // Reflective overlay for glass look
                 Rectangle()
                     .fill(LinearGradient(colors: [.white.opacity(0.05), .clear], startPoint: .top, endPoint: .bottom))
                     .blendMode(.screen)
-            }
+         }
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color(red: 0.4, green: 0.4, blue: 0.45).opacity(0.85), lineWidth: 1.5)
                     .shadow(radius: 1)
             )
-            .background(
+           .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(LinearGradient(
                         gradient: Gradient(colors: [Color(red: 0.15, green: 0.15, blue: 0.18), Color(red: 0.05, green: 0.05, blue: 0.08)]),

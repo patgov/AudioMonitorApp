@@ -1,9 +1,4 @@
-    //
-    //  DevicePickerView.swift
-    //  AudioMonitorApp
-    //
-    //  Created by Pat Govan on 6/8/25.
-    //
+
 
 import SwiftUI
 
@@ -25,6 +20,15 @@ struct DevicePickerView: View {
         .padding()
     }
 }
+
+#if DEBUG
+import CoreAudio
+
+extension InputAudioDevice {
+    nonisolated(unsafe) static let preview = InputAudioDevice(id: AudioObjectID(1), name: "Mock Mic", channelCount: 2)
+}
+#endif
+
 
 #Preview {
     DevicePickerView(

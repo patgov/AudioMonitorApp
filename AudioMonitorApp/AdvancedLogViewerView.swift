@@ -5,7 +5,7 @@ struct AdvancedLogViewerView: View {
     let entries: [LogEntry]
     let logManager: any LogManagerProtocol
 
-    @State private var selectedDevice = InputAudioDevice(id: "mock", uid: "mock-uid", name: "Mock Mic", audioObjectID: AudioObjectID(999),channelCount: 2)
+    @State private var selectedDevice = InputAudioDevice(id: 1, name: "Mock Mic", channelCount: 2)
     @State private var selectedLogLevel = "INFO"
 
     private var filteredEntries: [LogEntry] {

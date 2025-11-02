@@ -3,12 +3,12 @@ import Combine
 
 
 @MainActor
-public protocol LogManagerProtocol: AnyObject {
+ protocol LogManagerProtocol: AnyObject {
         /// The latest audio statistics, updated in real-time.
     var latestStats: AudioStats { get }
 
         /// Called by the audio processor to update the current statistics.
-    func update(stats: AudioStats)
+  func update(stats: AudioStats)
 
         /// Records an informational log message.
     func addInfo(message: String, channel: Int?, value: Float?)

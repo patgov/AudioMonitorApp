@@ -3,7 +3,7 @@ import AVFoundation
 import Combine
 
 @MainActor
-public protocol AudioManagerProtocol: AnyObject {
+ protocol AudioManagerProtocol: AnyObject {
         /// Current left channel audio level in dB.
     var leftLevel: Float { get }
 

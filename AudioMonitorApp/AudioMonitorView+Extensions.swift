@@ -12,8 +12,8 @@ struct AudioMonitorView_Extensions: View {
     
     var body: some View {
         StyledAnalogVUMeterView(
-            leftLevel: viewModel.leftLevel,
-            rightLevel: viewModel.rightLevel
+            leftLevel: Float(viewModel.leftLevel),
+            rightLevel: Float(viewModel.rightLevel)
         )
         .frame(width: 300, height: 150)
         .padding()

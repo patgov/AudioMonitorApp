@@ -1,30 +1,43 @@
+
 import SwiftUI
+import CoreAudio
 
 #Preview {
     AudioMonitorPreviewWrapper()
 }
 
 private struct AudioMonitorPreviewWrapper: View {
-    @StateObject private var viewModel = AudioMonitorViewModel(
-        audioManager: DummyAudioManager(),
-        logManager: PreviewSafeLogManager()
+        // ⬇︎ Static so nothing about `self` is captured
+    private static let dummy = DummyAudioManager()
+    
+    @StateObject private var deviceManager: AudioDeviceManager
+    @StateObject private var viewModel: AudioMonitorViewModel
+    
+    
+    let mockDevice = InputAudioDevice(
+        id: AudioObjectID(1),
+        name: "🎙️ Mock Mic",
+        channelCount: 2
     )
+
+    
+    init() {
+        let dummy = Self.dummy
+        
+        let mock = InputAudioDevice(id: AudioObjectID(1), name: "🎙️ Mock Mic", channelCount: 2)
+        
+        let dm = AudioDeviceManager(audioManager: dummy)
+        dm.injectMockDevices([mock], selected: mock)
+        
+        _deviceManager = StateObject(wrappedValue: dm)
+        _viewModel     = StateObject(wrappedValue: AudioMonitorViewModel(
+            audioManager: dummy,
+            logManager: PreviewSafeLogManager()
+        ))
+    }
     
     var body: some View {
-        let mockDevice = InputAudioDevice(
-            id: "123",
-            uid: "mock-uid",
-            name: "🎙️ Mock Mic",
-            audioObjectID: 1,
-            channelCount: 2
-        )
-        
-        let mockDeviceManager = AudioDeviceManager(audioManager: DummyAudioManager())
-        mockDeviceManager.injectMockDevices([mockDevice], selected: mockDevice)
-        
-        return AudioMonitorView(viewModel: viewModel, deviceManager: mockDeviceManager)
-            .onAppear {
-                viewModel.updateLevels(left: -10.0, right: -8.0)
-            }
+        AudioMonitorView(viewModel: viewModel, deviceManager: deviceManager)
+            .onAppear { viewModel.updateLevels(left: -10.0, right: -8.0) }
     }
 }

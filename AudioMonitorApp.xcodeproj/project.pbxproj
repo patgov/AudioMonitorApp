@@ -6,22 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		3DDCBCFC2DF0A3DC00B433C1 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D62A1D32DEDFB55002FFCC9 /* WidgetKit.framework */; };
-		3DDCBCFD2DF0A3DC00B433C1 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D62A1D52DEDFB55002FFCC9 /* SwiftUI.framework */; };
-		3DDCBD092DF0A3DD00B433C1 /* AudioMonitorWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3DDCBCFB2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-/* End PBXBuildFile section */
-
-/* Begin PBXContainerItemProxy section */
-		3DDCBD072DF0A3DD00B433C1 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3D69EBDE2D9970800056F87C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3DDCBCFA2DF0A3DC00B433C1;
-			remoteInfo = AudioMonitorWidgetExtension;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXCopyFilesBuildPhase section */
 		3DDCBD0E2DF0A3DD00B433C1 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -29,7 +13,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				3DDCBD092DF0A3DD00B433C1 /* AudioMonitorWidgetExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -40,8 +23,10 @@
 		3D62A1D32DEDFB55002FFCC9 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		3D62A1D52DEDFB55002FFCC9 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		3D69EBE62D9970800056F87C /* AudioMonitorApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioMonitorApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3D81F3102E282F95001F43A8 /* ThreadSafetyValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ThreadSafetyValidator.swift; path = AudioMonitorApp/ThreadSafetyValidator.swift; sourceTree = "<group>"; };
 		3DA40EC32DF09B1700BE1354 /* AudioMonitorApp.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = AudioMonitorApp.xcodeproj; sourceTree = SOURCE_ROOT; };
-		3DDCBCFB2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AudioMonitorWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E2AAF6B52E4BD11D0043D9E4 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		E2AAF6B62E4BD27A0043D9E4 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -52,13 +37,6 @@
 				"Readme/AudioMonitorApp structure.md",
 			);
 			target = 3D69EBE52D9970800056F87C /* AudioMonitorApp */;
-		};
-		3DDCBD0A2DF0A3DD00B433C1 /* Exceptions for "AudioMonitorWidget" folder in "AudioMonitorWidgetExtension" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 3DDCBCFA2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -78,9 +56,6 @@
 		};
 		3DDCBCFE2DF0A3DD00B433C1 /* AudioMonitorWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				3DDCBD0A2DF0A3DD00B433C1 /* Exceptions for "AudioMonitorWidget" folder in "AudioMonitorWidgetExtension" target */,
-			);
 			path = AudioMonitorWidget;
 			sourceTree = "<group>";
 		};
@@ -91,15 +66,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		3DDCBCF82DF0A3DC00B433C1 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				3DDCBCFD2DF0A3DC00B433C1 /* SwiftUI.framework in Frameworks */,
-				3DDCBCFC2DF0A3DC00B433C1 /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +84,9 @@
 		3D69EBDD2D9970800056F87C = {
 			isa = PBXGroup;
 			children = (
+				E2AAF6B52E4BD11D0043D9E4 /* Debug.xcconfig */,
+				E2AAF6B62E4BD27A0043D9E4 /* Release.xcconfig */,
+				3D81F3102E282F95001F43A8 /* ThreadSafetyValidator.swift */,
 				3DA40EC32DF09B1700BE1354 /* AudioMonitorApp.xcodeproj */,
 				3D69EBE82D9970800056F87C /* AudioMonitorApp */,
 				3D9B79DC2DF0885D00F528F3 /* AudioMonitorWidgetExtension */,
@@ -131,7 +100,6 @@
 			isa = PBXGroup;
 			children = (
 				3D69EBE62D9970800056F87C /* AudioMonitorApp.app */,
-				3DDCBCFB2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -156,7 +124,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				3DDCBD082DF0A3DD00B433C1 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				3D69EBE82D9970800056F87C /* AudioMonitorApp */,
@@ -168,28 +135,6 @@
 			productReference = 3D69EBE62D9970800056F87C /* AudioMonitorApp.app */;
 			productType = "com.apple.product-type.application";
 		};
-		3DDCBCFA2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 3DDCBD0B2DF0A3DD00B433C1 /* Build configuration list for PBXNativeTarget "AudioMonitorWidgetExtension" */;
-			buildPhases = (
-				3DDCBCF72DF0A3DC00B433C1 /* Sources */,
-				3DDCBCF82DF0A3DC00B433C1 /* Frameworks */,
-				3DDCBCF92DF0A3DC00B433C1 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				3DDCBCFE2DF0A3DD00B433C1 /* AudioMonitorWidget */,
-			);
-			name = AudioMonitorWidgetExtension;
-			packageProductDependencies = (
-			);
-			productName = AudioMonitorWidgetExtension;
-			productReference = 3DDCBCFB2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -198,13 +143,10 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1630;
-				LastUpgradeCheck = 1630;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					3D69EBE52D9970800056F87C = {
 						CreatedOnToolsVersion = 16.2;
-					};
-					3DDCBCFA2DF0A3DC00B433C1 = {
-						CreatedOnToolsVersion = 16.3;
 					};
 				};
 			};
@@ -229,20 +171,12 @@
 			projectRoot = "";
 			targets = (
 				3D69EBE52D9970800056F87C /* AudioMonitorApp */,
-				3DDCBCFA2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		3D69EBE42D9970800056F87C /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		3DDCBCF92DF0A3DC00B433C1 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -259,26 +193,12 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		3DDCBCF72DF0A3DC00B433C1 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		3DDCBD082DF0A3DD00B433C1 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 3DDCBCFA2DF0A3DC00B433C1 /* AudioMonitorWidgetExtension */;
-			targetProxy = 3DDCBD072DF0A3DD00B433C1 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		3D69EBF32D9970810056F87C /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E2AAF6B52E4BD11D0043D9E4 /* Debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -337,6 +257,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -345,6 +266,7 @@
 		};
 		3D69EBF42D9970810056F87C /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E2AAF6B62E4BD27A0043D9E4 /* Release.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -396,6 +318,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 6.0;
 			};
@@ -404,9 +327,12 @@
 		3D69EBF62D9970810056F87C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = vu_meter;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = AudioMonitorApp/AudioMonitorApp.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -416,25 +342,40 @@
 				DEVELOPMENT_TEAM = SYJ72F7Z55;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AudioMonitorApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor ";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires access to the microphone to monitor audio levels.";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AudioMonitor needs microphone access to display live input levels and diagnostics.";
+				LD_RUNPATH_SEARCH_PATH = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks\n";
+				LD_RUNPATH_SEARCH_PATHS = "\"$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks\"";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
+				NEW_SETTING = "-Xfrontend -disable-availability-checking";
+				NEW_SETTING1 = "-Xfrontend -warn-concurrency";
 				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
 				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 6.0;
+				Swift_Concurrency_Checking = Minimal;
 				TARGETED_DEVICE_FAMILY = "";
 			};
 			name = Debug;
@@ -442,9 +383,12 @@
 		3D69EBF72D9970810056F87C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = vu_meter;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = AudioMonitorApp/AudioMonitorApp.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -454,86 +398,41 @@
 				DEVELOPMENT_TEAM = SYJ72F7Z55;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AudioMonitorApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor ";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires access to the microphone to monitor audio levels.";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AudioMonitor needs microphone access to display live input levels and diagnostics.";
+				LD_RUNPATH_SEARCH_PATH = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks\n";
+				LD_RUNPATH_SEARCH_PATHS = "\"$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks\"";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
+				NEW_SETTING = "-Xfrontend -disable-availability-checking";
+				NEW_SETTING1 = "-Xfrontend -warn-concurrency";
 				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
 				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 6.0;
+				Swift_Concurrency_Checking = Minimal;
 				TARGETED_DEVICE_FAMILY = "";
-			};
-			name = Release;
-		};
-		3DDCBD0C2DF0A3DD00B433C1 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = AudioMonitorWidget/AudioMonitorWidget.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = SYJ72F7Z55;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = AudioMonitorWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@executable_path/../../../../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.4;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp.AudioMonitorWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Debug;
-		};
-		3DDCBD0D2DF0A3DD00B433C1 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = AudioMonitorWidget/AudioMonitorWidget.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = SYJ72F7Z55;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = AudioMonitorWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@executable_path/../../../../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.4;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorApp.AudioMonitorWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -554,15 +453,6 @@
 			buildConfigurations = (
 				3D69EBF62D9970810056F87C /* Debug */,
 				3D69EBF72D9970810056F87C /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		3DDCBD0B2DF0A3DD00B433C1 /* Build configuration list for PBXNativeTarget "AudioMonitorWidgetExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				3DDCBD0C2DF0A3DD00B433C1 /* Debug */,
-				3DDCBD0D2DF0A3DD00B433C1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

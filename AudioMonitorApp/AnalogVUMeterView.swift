@@ -3,46 +3,73 @@ import SwiftUI
 struct AnalogVUMeterView: View {
     @Binding var leftLevel: Float
     @Binding var rightLevel: Float
-
+    @State private var smoothedLeft: Float = -20.0
+    @State private var smoothedRight: Float = -20.0
+    
     var body: some View {
-        GeometryReader { geometry in
-            VStack {
-                Text("Stereo VU Meter")
-                    .font(.title3.bold())
-                    .foregroundColor(.yellow)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.bottom, 8)
-
-                HStack(spacing: 32) {
-                    VStack {
-                        VUMeterNeedleView(level: leftLevel, label: "L")
-                            .frame(width: geometry.size.width * 0.4, height: geometry.size.width * 0.4)
-                        Text(String(format: "%.1f dB", leftLevel))
-                            .foregroundColor(.green)
-                            .font(.caption2)
-                    }
-                    .layoutPriority(1)
-
-                    VStack {
-                        VUMeterNeedleView(level: rightLevel, label: "R")
-                            .frame(width: geometry.size.width * 0.4, height: geometry.size.width * 0.4)
-                        Text(String(format: "%.1f dB", rightLevel))
-                            .foregroundColor(.green)
-                            .font(.caption2)
-                    }
-                    .layoutPriority(1)
-                }
+        VStack(spacing: 12) {
+            Text("Stereo VU Meter")
+                .font(.title3.bold())
+                .foregroundColor(.yellow)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding()
-            .background(Color(red: 0.96, green: 0.94, blue: 0.86))            }
-          //  .padding(.top, 80)
+                .padding(.top, 8)
+            
+            HStack(spacing: 20) {
+                VStack(spacing: 8) {
+                    VUMeterNeedleView(level: smoothedLeft, label: "L")
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 160)
+                    Text(String(format: "%.1f dBFS", smoothedLeft))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.green)
+                }
+                .layoutPriority(1)
+                
+                VStack(spacing: 8) {
+                    VUMeterNeedleView(level: smoothedRight, label: "R")
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 160)
+                    
+                    Text(String(format: "%.1f dBFS", smoothedRight))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.green)
+                }
+                .layoutPriority(1)
+                
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
         }
+        .onAppear {
+                // Initialize smoothed values so the labels show immediately
+            smoothedLeft = leftLevel
+            smoothedRight = rightLevel
+        }
+        .onChange(of: leftLevel) { oldValue, newValue in
+                // Animate to new left level
+            withAnimation(.linear(duration: 0.08)) {
+                smoothedLeft = newValue
+            }
+        }
+        .onChange(of: rightLevel) { oldValue, newValue in
+                // Animate to new right level
+            withAnimation(.linear(duration: 0.08)) {
+                smoothedRight = newValue
+            }
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .overlay(
+            RoundedRectangle(cornerRadius: 0)
+                .stroke(Color.black, lineWidth: 2)
+        )
     }
 }
 #Preview("Analog VU Meter Preview", traits: .sizeThatFitsLayout) {
     AnalogVUMeterView(
-        leftLevel: .constant(-80.0),
-        rightLevel: .constant(-80.0)
+        leftLevel: .constant(-20.0),
+        rightLevel: .constant(-20.0)
     )
     .frame(maxWidth: .infinity, minHeight: 300)
     .padding()
@@ -50,52 +77,5 @@ struct AnalogVUMeterView: View {
 }
 
 
-struct AnalogVUMeterView_Previews {
-    struct Container: View {
-        @State private var left: Float = -80
-        @State private var right: Float = -80
 
-        var body: some View {
-            AnalogVUMeterView(leftLevel: $left, rightLevel: $right)
-                .padding()
-                .background(Color.black)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 0.6)) {
-                        left = 6.5
-                        right = 6.5
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-                        withAnimation(.easeInOut(duration: 0.5)) {
-                            left = -80
-                            right = -80
-                        }
-                    }
-                }
-        }
-    }
 
-    static var previews: some View {
-        Container()
-            .frame(maxWidth: .infinity, minHeight: 300)
-            .background(Color.black)
-            .previewLayout(.device)
-    }
-}
-
-//
-//struct VUMeterNeedleView_Previews: PreviewProvider {
-//    struct Container: View {
-//        @State private var testLevel: Float = -80
-//
-//        var body: some View {
-//            VUMeterNeedleView(level: testLevel, label: "Preview")
-//                .padding()
-//             //   .background(Color.black)
-//        }
-//    }
-//
-//    static var previews: some View {
-//        Container()
-//            .previewLayout(.sizeThatFits)
-//    }
-//}

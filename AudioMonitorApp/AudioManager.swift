@@ -1,344 +1,740 @@
-/*
- The arc color VU meter scale:
- •    Gray for low-level signals
- •    Orange for moderate
- •    Green for optimal
- •    Red for overmodulation (0 to +3)
- */
-
-
-import SwiftUI
-// import AudioToolbox
+import Foundation
 import Combine
-import AVFoundation
+@preconcurrency import AVFoundation
 import os
+#if os(macOS)
+import CoreAudio
+#endif
+import Accelerate
 
-    /// `AudioManager` handles audio input configuration, processing, and publishing real-time audio stats.
-    /// It integrates with AVAudioEngine to monitor input, mirrors mono input to stereo,
-    /// and emits `AudioStats` via Combine. Supports silence detection, fallback devices,
-    /// and widget data publishing via App Group.
+@MainActor
 public final class AudioManager: ObservableObject, AudioManagerProtocol {
-    
     private let logger = Logger(subsystem: "us.govango.AudioMonitorApp", category: "AudioManager")
-    private let sharedDefaults = UserDefaults(suiteName: "group.us.govango.AudioMonitorApp")
     
-    private var silentBufferCounter = 0
-    private var isSilentInputWarningShown = false
+        // Backing storage for protocol Float getters
+    private var currentLeftLevel: Float = -120
+    private var currentRightLevel: Float = -120
     
-    private var selectedInputDeviceSubject = CurrentValueSubject<InputAudioDevice, Never>(.none)
-    private var inputDevicesSubject = CurrentValueSubject<[InputAudioDevice], Never>([])
-    private var selectedDevice: InputAudioDevice = .none
-    @MainActor
-    private var logManager: LogManagerProtocol?
-        // Placeholder for stats subject, to be replaced with real implementation later
-    private var statsSubject = CurrentValueSubject<AudioStats, Never>(.zero)
+        // Input devices stream required by AudioManagerProtocol
+    private let inputDevicesSubject = CurrentValueSubject<[InputAudioDevice], Never>([])
+    public var inputDevicesStream: AnyPublisher<[InputAudioDevice], Never> { inputDevicesSubject.eraseToAnyPublisher() }
     
-    private var audioEngine: AVAudioEngine?
-    private let audioProcessor = AudioProcessor()
-    private var cancellables = Set<AnyCancellable>()
+        // MARK: - Published Streams
+    private let statsSubject = CurrentValueSubject<AudioStats, Never>(.zero)
     
-    private var smoothedLeft: Float = -80.0
-    private var smoothedRight: Float = -80.0
-    private let smoothingFactor: Float = 0.1
+        // Per-channel level streams required by AudioManagerProtocol
+    private let leftLevelSubject = CurrentValueSubject<Float, Never>(-120)
+    private let rightLevelSubject = CurrentValueSubject<Float, Never>(-120)
+    public var leftLevelStream: AnyPublisher<Float, Never> { leftLevelSubject.eraseToAnyPublisher() }
+    public var rightLevelStream: AnyPublisher<Float, Never> { rightLevelSubject.eraseToAnyPublisher() }
     
-    public var leftLevel: Float {
-        return audioProcessor.currentLeftLevel
-    }
+        // Selected device stream required by AudioManagerProtocol
+    private let selectedInputDeviceSubject = CurrentValueSubject<InputAudioDevice, Never>(.none)
+    public var selectedInputDeviceStream: AnyPublisher<InputAudioDevice, Never> { selectedInputDeviceSubject.eraseToAnyPublisher() }
     
-    public var rightLevel: Float {
-        return audioProcessor.currentRightLevel
-    }
+    public var audioStatsStream: AnyPublisher<AudioStats, Never> { statsSubject.eraseToAnyPublisher() }
     
-    public var isRunning: Bool {
-        return audioEngine?.isRunning ?? false
-    }
+        // Protocol-required current levels (Float getters)
+    public var leftLevel: Float { currentLeftLevel }
+    public var rightLevel: Float { currentRightLevel }
     
-    public var audioStatsStream: AnyPublisher<AudioStats, Never> {
-        statsSubject.eraseToAnyPublisher()
-    }
+        // MARK: - Engine
+        // private var engine: AVAudioEngine?
+    private var tapInstalled = false
+    private var pendingRestartWork: DispatchWorkItem? = nil
+        // Tap/engine retry for transient zero-channel states after route changes
+    private var tapRetryCount = 0
+    private let tapRetryMax = 10
+    private let tapRetryDelay: TimeInterval = 0.25
+    private var pendingTapRetry: DispatchWorkItem? = nil
     
-    public var inputDevicesStream: AnyPublisher<[InputAudioDevice], Never> {
-        inputDevicesSubject.eraseToAnyPublisher()
-    }
+#if !os(macOS)
+    private let session = AVAudioSession.sharedInstance()
+#endif
+    private let engine = AVAudioEngine()
     
-    public var selectedInputDeviceStream: AnyPublisher<InputAudioDevice, Never> {
-        selectedInputDeviceSubject.eraseToAnyPublisher()
-    }
+        // Tracks whether the app has been granted Mic permission (TCC)
+    private var hasMicPermission: Bool = false
     
-        /// Updates the reference to the log manager used for audio event tracking.
-    public func updateLogManager(_ logManager: any LogManagerProtocol) {
-            // Implementation pending – ensure there's a stored reference if needed
-        self.logManager = logManager
-    }
+        // Prevent overlapping graph builds / starts
+    private var isStarting = false
     
-        /// Selects the audio input device to be used for monitoring.
+        // Conservative tap buffer to satisfy devices with small mMaxFramesPerSlice (e.g., 24000–48000 Hz inputs)
+    private let tapBufferSize: AVAudioFrameCount = 192
+    
+        // Normalization for level metering (convert any input to 2ch Float32 @ input sample rate before measuring)
+    private var meterConverter: AVAudioConverter? = nil
+    private var meterFormat: AVAudioFormat? = nil
+#if os(macOS)
+        /// Do NOT force the macOS System Settings default input to our selection unless explicitly enabled.
+    private var forceSystemDefaultToSelected = false
+        /// Tracks whether we've registered a listener for default input changes.
+    private var defaultListenerInstalled = false
+#endif
+    
+    public var isRunning: Bool { engine.isRunning }
+    
+        // MARK: - Smoothing & Silence
+    private var smoothedLeft: Float = -80
+    private var smoothedRight: Float = -80
+    private let smoothing: Float = 0.12
+        /// Levels below this threshold are treated as silence to avoid false "hot" idles on some devices.
+    private let noiseGateDB: Float = -90
+    private var silentCount = 0
+    
+        // MARK: - Selected Device
+    public private(set) var selectedDevice: InputAudioDevice = .none
+    
+        // MARK: - Public Controls
     public func selectDevice(_ device: InputAudioDevice) {
-        selectedDevice = device
-        selectedInputDeviceSubject.send(device)
+        DispatchQueue.main.async {
+                // Ignore if selecting the same device
+            if device.id == self.selectedDevice.id { return }
+            
+                // Update selection & publish immediately so UI reflects the change
+            self.selectedDevice = device
+            self.selectedInputDeviceSubject.send(device)
+            
+                // Debounce engine restart to avoid thrashing when user scrolls the picker
+            self.pendingRestartWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    self.verifyMicPermissionThen { [weak self] in
+                        guard let self = self else { return }
+                        if self.engine.isRunning { self.engine.stop() }
+                        if self.tapInstalled {
+                            self.engine.inputNode.removeTap(onBus: 0)
+                            self.tapInstalled = false
+                        }
+                        self.startEngine()
+                    }
+                }
+            }
+            self.pendingRestartWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+        }
     }
     
-        /// Starts the audio engine and installs a tap to capture microphone input.
-    public func start() {
-            // Refresh devices before proceeding
-        refreshAvailableDevices()
-        
-        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" ||
-            Bundle.main.bundleIdentifier != "us.govango.AudioMonitorApp" {
-            logger.warning("🛑 [Preview Diagnostic] AudioManager.start() was triggered during SwiftUI Preview or in widget/extension context!")
-        } else {
-            logger.info("✅ [Runtime] AudioManager.start() running in normal app mode.")
-        }
-        
-        guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1",
-              Bundle.main.bundleIdentifier == "us.govango.AudioMonitorApp" else {
-            logger.info("⏸️ Skipping audio engine start in preview or widget mode.")
+    
+        /// Ensures we currently have mic permission; if granted, runs `action` on the main thread.
+    private func verifyMicPermissionThen(_ action: @MainActor @escaping @Sendable () -> Void) {
+#if os(macOS)
+        if hasMicPermission {
+            Task { @MainActor in action() }
             return
         }
-        
-        let engine = AVAudioEngine()
-        engine.reset()
-        self.audioEngine = engine
-        
-        audioProcessor.audioStatsStream
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] stats in
-                self?.statsSubject.send(stats)
+            // Re-check — covers cases where the user granted permission after launch.
+        ensureMicPermission { [weak self] granted in
+            guard let self = self else { return }
+            if granted {
+                self.logger.info("✅ Mic permission verified (runtime)")
+                Task { @MainActor in action() }
+            } else {
+                self.logger.error("🚫 Mic permission missing — cannot start engine for new device")
             }
-            .store(in: &cancellables)
-        
-        let inputNode = engine.inputNode
-        let inputFormat = inputNode.inputFormat(forBus: 0)
-        logger.info("🔍 InputNode HW format: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) ch")
-        logger.info("🔎 Input format: \(inputFormat)")
-        if inputNode.numberOfInputs > 0 {
-            inputNode.removeTap(onBus: 0)
         }
-        logger.info("🔍 Installing tap BEFORE engine start: \(inputFormat)")
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
-            guard let self else { return }
-            self.processAudio(buffer: buffer)
+#else
+        Task { @MainActor in action() }
+#endif
+    }
+    
+    
+    public func start() {
+        logger.info("▶️ start() called → delegating to startEngine()")
+        verifyMicPermissionThen { [weak self] in
+            self?.startEngine()
+        }
+    }
+    
+    public func stop() {
+        engine.stop()
+        if self.tapInstalled { self.engine.inputNode.removeTap(onBus: 0); self.tapInstalled = false }
+        logger.info("🛑 Audio engine stopped.")
+    }
+    
+        // Optional hook for wiring an external LogManager; satisfies protocol requirement
+    func updateLogManager(_ logManager: any LogManagerProtocol) {
+            // No-op in this implementation; kept for protocol conformance
+    }
+    
+        // MARK: - Core
+        // MARK: - Init
+    public init() {
+        logger.info("🔧 AudioManager init: engine created")
+        
+#if os(macOS)
+        installDeviceChangeListener()
+        installDefaultInputChangeListener()
+#endif
+        
+        ensureMicPermission { [weak self] granted in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if granted {
+                    self.logger.info("✅ Mic permission granted")
+                    self.hasMicPermission = true
+                    self.refreshInputDevices()
+#if os(macOS)
+                    if self.selectedDevice == .none, let def = self.systemDefaultInputDevice() {
+                        self.selectedDevice = def
+                        self.selectedInputDeviceSubject.send(def)
+                        self.logger.info("🎯 Adopted system default input on init: \(def.name) [id: \(def.id)]")
+                    }
+#endif
+                    if !self.isStarting { self.startEngine() }
+                } else {
+                    self.hasMicPermission = false
+                    self.logger.error("🚫 Mic permission denied — no input levels until granted")
+                    self.refreshInputDevices()
+                }
+            }
         }
         
+            // Retry once if the first fetch races HAL
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if self.inputDevicesSubject.value.isEmpty {
+                    self.logger.warning("🔄 Retrying device fetch after empty result")
+                    self.refreshInputDevices()
+                }
+            }
+        }
+    }
+    
+    func startEngine() {
+        logger.info("🔈 startEngine()")
+        guard !isStarting else {
+            logger.debug("⏳ startEngine ignored (already starting)")
+            return
+        }
+        isStarting = true
+        defer { isStarting = false }
+        
+            // Tear down any previous tap/graph safely
+        if engine.isRunning { engine.stop() }
+        let input = engine.inputNode
+        input.removeTap(onBus: 0)
+        tapInstalled = false
+        
+            // Configure AVAudioSession only on non‑macOS platforms
+#if !os(macOS)
+        do {
+            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .mixWithOthers, .allowBluetooth])
+            try session.setActive(true, options: [])
+        } catch {
+            logger.error("⚠️ AVAudioSession setup failed: \(error.localizedDescription)")
+        }
+#endif
+        
+            // Build a minimal live I/O graph so the engine has at least one I/O node
+        let mixer = engine.mainMixerNode
+        mixer.outputVolume = 0.0 // analysis only; no monitoring
+        engine.disconnectNodeInput(mixer)
+        engine.connect(input, to: mixer, format: input.inputFormat(forBus: 0))
+        
+            // Ensure mixer is connected to output so the render graph pulls samples
+        engine.disconnectNodeInput(engine.outputNode)
+        engine.connect(mixer, to: engine.outputNode, format: nil)
+        
+            // Prepare, start, and install the input tap
+        engine.prepare()
         do {
             try engine.start()
-            logger.info("🎧 Audio engine started.")
+            let fmt = input.inputFormat(forBus: 0)
+            logger.info("🎧 Engine started (\(fmt.channelCount)ch @ \(fmt.sampleRate) Hz)")
         } catch {
             logger.error("❌ Engine failed to start: \(error.localizedDescription)")
             return
         }
+        
+        let tapBlock = makeAudioTap()
+        input.installTap(onBus: 0, bufferSize: tapBufferSize, format: nil, block: tapBlock)
+        tapInstalled = true
+        
+            // Reset metering converters so they rebuild on first buffer
+        meterConverter = nil
+        meterFormat = nil
     }
     
-        // MARK: - New processAudio(buffer:) to handle mono/stereo mirroring and fallback
-    private func processAudio(buffer: AVAudioPCMBuffer) {
-        let channelCount = Int(buffer.format.channelCount)
-        let frameLength = Int(buffer.frameLength)
-            // Frame length check to avoid unnecessary processing
-        guard frameLength > 0 else {
-            logger.warning("⚠️ Skipping buffer with zero frame length.")
-            return
+    private func scheduleTapRetry(reason: String) {
+        guard engine.isRunning else { return }
+        guard tapRetryCount < tapRetryMax else { return }
+        tapRetryCount += 1
+        pendingTapRetry?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.logger.warning("🔁 Reinstalling tap (attempt \(self.tapRetryCount)) – \(reason)")
+            let input = self.engine.inputNode
+            input.removeTap(onBus: 0)
+            self.tapInstalled = false
+            let tapBlock = self.makeAudioTap()
+            input.installTap(onBus: 0, bufferSize: self.tapBufferSize, format: nil, block: tapBlock)
+            self.tapInstalled = true
+            self.meterConverter = nil
+            self.meterFormat = nil
         }
-        var left: Float = 0.0
-        var right: Float = 0.0
-        guard let channelData = buffer.floatChannelData else {
-            logger.error("❌ No channel data found in buffer.")
-            return
-        }
-            // --- Diagnostics: Print first few sample values for mono and stereo
-        if channelCount == 1 {
-            let monoChannel = channelData[0]
-            if frameLength >= 3 {
-                print("🔍 Mono input samples: \(monoChannel[0]), \(monoChannel[1]), \(monoChannel[2])")
-            } else if frameLength > 0 {
-                let samples = (0..<frameLength).map { "\(monoChannel[$0])" }.joined(separator: ", ")
-                print("🔍 Mono input samples (partial): \(samples)")
-            }
-        } else if channelCount >= 2 {
-            let leftChannel = channelData[0]
-            let rightChannel = channelData[1]
-            if frameLength >= 3 {
-                print("🔍 Stereo input samples — L: \(leftChannel[0]), \(leftChannel[1]), \(leftChannel[2])")
-                print("🔍 Stereo input samples — R: \(rightChannel[0]), \(rightChannel[1]), \(rightChannel[2])")
-            } else if frameLength > 0 {
-                let lSamples = (0..<frameLength).map { "\(leftChannel[$0])" }.joined(separator: ", ")
-                let rSamples = (0..<frameLength).map { "\(rightChannel[$0])" }.joined(separator: ", ")
-                print("🔍 Stereo input samples — L (partial): \(lSamples)")
-                print("🔍 Stereo input samples — R (partial): \(rSamples)")
-            }
-        }
-            // Mirror mono to stereo if needed, using RMS calculation
-        if channelCount == 1 {
-            let monoChannel = channelData[0]
-            var sumSquares: Float = 0.0
-            for i in 0..<frameLength {
-                let sample = monoChannel[i]
-                sumSquares += sample * sample
-            }
-            let rms = sqrt(sumSquares / Float(frameLength))
-            left = rms
-            right = rms
-        } else if channelCount >= 2 {
-            let leftChannel = channelData[0]
-            let rightChannel = channelData[1]
-            var sumLeft: Float = 0.0
-            var sumRight: Float = 0.0
-            for i in 0..<frameLength {
-                sumLeft += leftChannel[i] * leftChannel[i]
-                sumRight += rightChannel[i] * rightChannel[i]
-            }
-            left = sqrt(sumLeft / Float(frameLength))
-            right = sqrt(sumRight / Float(frameLength))
-        }
-            // Convert RMS to dBFS, clamp to -80 dB minimum
-        if left > 0 {
-            left = 20 * log10(left)
-        } else {
-            left = -80.0
-        }
-        if right > 0 {
-            right = 20 * log10(right)
-        } else {
-            right = -80.0
-        }
-            // Noise gate: suppress near-zero background noise (stricter gating threshold)
-        if left < -90.0 { left = -80.0 }
-        if right < -90.0 { right = -80.0 }
-        left = max(left, -80.0)
-        right = max(right, -80.0)
-            // Log dB levels and print left sample
-        logger.info("🎚️ AudioProcessor - dB levels → Left: \(left), Right: \(right), Device: \(self.selectedDevice.name) [\(self.selectedDevice.id)]")
-        print("🔊 First sample (L): \(left)")
-        self.audioProcessor.process(buffer: buffer,
-                                    inputName: self.selectedDevice.name,
-                                    inputID: Int(self.selectedDevice.audioObjectID))
-            // Silence detection and fallback logic
-        smoothedLeft = smoothingFactor * left + (1 - smoothingFactor) * smoothedLeft
-        smoothedRight = smoothingFactor * right + (1 - smoothingFactor) * smoothedRight
-            // Additional forced silence floor after smoothing
-        if left <= -79.5 {
-            smoothedLeft = -80.0
-        }
-        if right <= -79.5 {
-            smoothedRight = -80.0
-        }
-        let stats = AudioStats(left: smoothedLeft, right: smoothedRight, inputName: selectedDevice.name, inputID: Int(selectedDevice.audioObjectID))
-        let previous = statsSubject.value
-        if abs(previous.left - stats.left) > 0.01 || abs(previous.right - stats.right) > 0.01 {
-            statsSubject.send(stats)
-        }
-        writeStatsToSharedDefaults(stats)
-        if stats.left <= -80.0 && stats.right <= -80.0 {
-            guard silentBufferCounter > 5 else { return }
-            self.logger.warning("No audio detected on current device. Attempting fallback.")
-            self.tryFallbackDevice()
-        }
-        let isSilent = left <= -79.9 && right <= -79.9
-        if isSilent {
-            silentBufferCounter += 1
-            if silentBufferCounter > 20 && !isSilentInputWarningShown {
-                logger.warning("🛑 Warning: Silent input detected — input device is streaming silence.")
-                isSilentInputWarningShown = true
-            }
-        } else {
-            silentBufferCounter = 0
-            isSilentInputWarningShown = false
-        }
+        pendingTapRetry = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + tapRetryDelay, execute: work)
     }
     
-        // MARK: - Fallback device logic
-    private func tryFallbackDevice() {
-        let devices = self.availableDevices
-        for device in devices {
-            self.selectDevice(device)
-            self.start()
-            if self.leftLevel > -80.0 || self.rightLevel > -80.0 {
-                logger.info("Fallback device \(device.name) is capturing audio.")
-                break
-            }
+#if os(macOS)
+        /// Returns the current system default input device's volume scalar in [0,1], if available.
+    private func currentInputDeviceVolumeScalar() -> Float? {
+        guard let dev = systemDefaultInputDevice()?.id else { return nil }
+        var vol: Float32 = 0
+        var size = UInt32(MemoryLayout<Float32>.size)
+        
+        func readVolume(element: UInt32) -> Float32? {
+            var addr = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyVolumeScalar,
+                mScope: kAudioObjectPropertyScopeInput,
+                mElement: element
+            )
+            var tmp = vol
+            var tmpSize = size
+            let status = AudioObjectGetPropertyData(dev, &addr, 0, nil, &tmpSize, &tmp)
+            return status == noErr ? tmp : nil
         }
+        
+            // Try master first, then channel 1
+        if let master = readVolume(element: kAudioObjectPropertyElementMaster) { return master }
+        if let ch1 = readVolume(element: 1) { return ch1 }
+        return nil
     }
-    
-        /// Stops the audio engine and removes any active taps.
-    public func stop() {
-        audioEngine?.stop()
-        audioEngine?.inputNode.removeTap(onBus: 0)
-        logger.info("🛑 Audio engine stopped.")
-    }
+#endif
     
     
-    
-    
-    private func refreshAvailableDevices() {
-        guard Bundle.main.bundleIdentifier == "us.govango.AudioMonitorApp" else {
-            logger.info("⏸️ Skipping device refresh outside main app.")
-            return
-        }
-#if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        let devices = session.availableInputs?.map {
-            InputAudioDevice(id: $0.uid, name: $0.portName)
-        } ?? []
-        inputDevicesSubject.send(devices)
-        logger.info("🔄 Available devices: \(devices.map { $0.name })")
-#else
-            // macOS (not Catalyst): fetch live devices using Core Audio utilities.
-        let allDevices = InputAudioDevice.fetchAvailableDevices()
-            .filter { $0.channelCount > 0 }
-            .map { device in
-                InputAudioDevice(
-                    id: device.id,
-                    uid: device.uid,
-                    name: device.name,
-                    audioObjectID: device.audioObjectID,
-                    channelCount: device.channelCount
-                )
-            }
-        
-        print("🛠️ All discovered devices: \(allDevices.map { $0.displayName })")
-        logger.info("🔄 Available devices: \(allDevices.map { "\($0.name) [\($0.channelCount)ch]" })")
-        
-        _ = InputAudioDevice.fetchDefaultInputDeviceID()
-        
-        inputDevicesSubject.send([.none] + allDevices)
-        
-        if selectedDevice == InputAudioDevice.none || !allDevices.contains(selectedDevice) {
-                // Prefer devices with more than 1 channel and without known virtual/poor-quality identifiers
-            let preferred = allDevices.first {
-                let name = $0.name.lowercased()
-                let isVirtual = name.contains("blackhole") || name.contains("display") || name.contains("airpods") || name.contains("camera") || name.contains("parallels")
-                return !isVirtual && $0.channelCount >= 1
-            } ?? allDevices.first
+        // MARK: - Audio Tap
+    private func makeAudioTap() -> (AVAudioPCMBuffer, AVAudioTime) -> Void {
+        return { [weak self] buffer, _ in
+            guard let self = self else { return }
             
-            if let autoSelect = preferred {
-                self.selectedDevice = autoSelect
-                print("🎯 Auto-selected preferred device: \(autoSelect.name) [\(autoSelect.id)]")
+            guard buffer.frameLength > 0 else { return }
+            
+#if os(macOS)
+            if let vol = self.currentInputDeviceVolumeScalar(), vol <= 0.01 {
+                    // System input volume is effectively zero — treat as silence
+                DispatchQueue.main.async { [weak self] in self?.processLevels(left: -120, right: -120) }
+                return
+            }
+#endif
+            
+                // Build/refresh a target format that matches the source sample rate and uses up to 2 non-interleaved channels
+            let srcFmt = buffer.format
+            let targetChannels = min(srcFmt.channelCount, 2)
+            if self.meterFormat == nil ||
+                self.meterFormat?.sampleRate != srcFmt.sampleRate ||
+                self.meterFormat?.channelCount != targetChannels {
+                self.meterFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+                                                 sampleRate: srcFmt.sampleRate,
+                                                 channels: targetChannels,
+                                                 interleaved: false)
+                self.meterConverter = nil
+            }
+            
+            let tgtFmt = self.meterFormat!
+            if self.meterConverter == nil ||
+                self.meterConverter?.inputFormat != srcFmt ||
+                self.meterConverter?.outputFormat != tgtFmt {
+                self.meterConverter = AVAudioConverter(from: srcFmt, to: tgtFmt)
+            }
+            
+            if self.meterConverter == nil, let tgt = self.meterFormat {
+                self.meterConverter = AVAudioConverter(from: srcFmt, to: tgt)
+            }
+            
+            guard let tgtFmt = self.meterFormat else {
+                let (l, r) = Self.computeLevels(from: buffer)
+                DispatchQueue.main.async { [weak self] in self?.processLevels(left: l, right: r) }
+                return
+            }
+            
+                // If source already matches target (Float32, non-interleaved, <=2ch), skip conversion
+            let needsConvert = !(srcFmt.commonFormat == .pcmFormatFloat32 &&
+                                 srcFmt.isInterleaved == false &&
+                                 srcFmt.sampleRate == tgtFmt.sampleRate &&
+                                 srcFmt.channelCount <= 2)
+            
+            var outBuffer: AVAudioPCMBuffer? = nil
+            if !needsConvert {
+                outBuffer = buffer
+            } else if let converter = self.meterConverter {
+                let frames = AVAudioFrameCount(min(Int(buffer.frameLength), 2048))
+                guard let temp = AVAudioPCMBuffer(pcmFormat: tgtFmt, frameCapacity: frames) else {
+                    outBuffer = nil
+                        // fall through to publish silence via the guard below
+                        // (do not analyze incompatible source buffer)
+                    return
+                }
+                temp.frameLength = frames
+                
+                var convError: NSError? = nil
+                let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
+                    outStatus.pointee = .haveData
+                    return buffer
+                }
+                _ = converter.convert(to: temp, error: &convError, withInputFrom: inputBlock)
+                if convError == nil, temp.frameLength > 0 {
+                    outBuffer = temp
+                } else {
+                        // If conversion fails, do NOT analyze the non-Float source — report silence to avoid bogus highs.
+                    outBuffer = nil
+                }
+            }
+            
+            guard let out = outBuffer else {
+                    // Treat as silence on conversion failure to avoid false positives
+                DispatchQueue.main.async { [weak self] in self?.processLevels(left: -120, right: -120) }
+                return
+            }
+            let (rawL, rawR) = Self.computeLevels(from: out)
+                // Apply a small noise gate so muted/idle inputs don't show as "hot" due to device bias/noise.
+            let dBL = (rawL < self.noiseGateDB) ? -120 : rawL
+            let dBR = (rawR < self.noiseGateDB) ? -120 : rawR
+            DispatchQueue.main.async { [weak self] in
+                self?.processLevels(left: dBL, right: dBR)
+            }
+        }
+    }
+    
+    private static func computeLevels(from buffer: AVAudioPCMBuffer) -> (Float, Float) {
+        let n = vDSP_Length(buffer.frameLength)
+        let chs = Int(buffer.format.channelCount)
+        guard n > 0, chs > 0 else { return (-120, -120) }
+        
+            // Non-interleaved Float32 fast path
+        if buffer.format.commonFormat == .pcmFormatFloat32, buffer.format.isInterleaved == false, let data = buffer.floatChannelData {
+                // Variance RMS without modifying source
+                // Left
+            var meanL: Float = 0
+            vDSP_meanv(data[0], 1, &meanL, n)
+            var meanSqL: Float = 0
+            vDSP_measqv(data[0], 1, &meanSqL, n)
+            let varL = max(meanSqL - meanL * meanL, 0)
+            let rmsL = sqrtf(varL)
+            var dBL = 20 * log10f(max(rmsL, 1e-9))
+            dBL = max(-120.0, min(dBL, 0.0))
+            
+                // Right or mirror mono
+            var dBR: Float = dBL
+            if chs > 1 {
+                let right = data[1]
+                var meanR: Float = 0
+                vDSP_meanv(right, 1, &meanR, n)
+                var meanSqR: Float = 0
+                vDSP_measqv(right, 1, &meanSqR, n)
+                let varR = max(meanSqR - meanR * meanR, 0)
+                let rmsR = sqrtf(varR)
+                dBR = 20 * log10f(max(rmsR, 1e-9))
+                dBR = max(-120.0, min(dBR, 0.0))
+            }
+            return (dBL, dBR)
+        }
+        
+            // Interleaved Float32 (or any other format exposed as one AudioBuffer)
+        if buffer.format.commonFormat == .pcmFormatFloat32, buffer.format.isInterleaved,
+           let abl = buffer.audioBufferList.pointee.mBuffers.mData?.assumingMemoryBound(to: Float.self) {
+            let stride = chs
+                // Left
+            var meanL: Float = 0
+            vDSP_meanv(abl, vDSP_Stride(stride), &meanL, n)
+            var meanSqL: Float = 0
+            vDSP_measqv(abl, vDSP_Stride(stride), &meanSqL, n)
+            let varL = max(meanSqL - meanL * meanL, 0)
+            let rmsL = sqrtf(varL)
+            var dBL = 20 * log10f(max(rmsL, 1e-9))
+            dBL = max(-120.0, min(dBL, 0.0))
+            
+                // Right or mirror mono
+            var dBR: Float = dBL
+            if chs > 1 {
+                var meanR: Float = 0
+                vDSP_meanv(abl.advanced(by: 1), vDSP_Stride(stride), &meanR, n)
+                var meanSqR: Float = 0
+                vDSP_measqv(abl.advanced(by: 1), vDSP_Stride(stride), &meanSqR, n)
+                let varR = max(meanSqR - meanR * meanR, 0)
+                let rmsR = sqrtf(varR)
+                dBR = 20 * log10f(max(rmsR, 1e-9))
+                dBR = max(-120.0, min(dBR, 0.0))
+            }
+            return (dBL, dBR)
+        }
+        
+            // No fallback for non-Float32: must be converted before analysis
+        
+        return (-120, -120)
+    }
+    
+    private func processLevels(left: Float, right: Float) {
+        smoothedLeft  = smoothing * left  + (1 - smoothing) * smoothedLeft
+        smoothedRight = smoothing * right + (1 - smoothing) * smoothedRight
+        
+        currentLeftLevel = smoothedLeft
+        currentRightLevel = smoothedRight
+        
+        leftLevelSubject.send(smoothedLeft)
+        rightLevelSubject.send(smoothedRight)
+        
+        let stats = AudioStats(left: smoothedLeft, right: smoothedRight,
+                               inputName: selectedDevice.name, inputID: Int(selectedDevice.id))
+        statsSubject.send(stats)
+        
+            // Silence probe with tap watchdog
+        if left <= -119 && right <= -119 {
+            silentCount += 1
+            if silentCount == 20 {
+                logger.warning("🛑 Silent input detected.")
+                scheduleTapRetry(reason: "sustained silence")
+            }
+        } else {
+            silentCount = 0
+            tapRetryCount = 0
+            pendingTapRetry?.cancel(); pendingTapRetry = nil
+        }
+    }
+    
+        // MARK: - Device Enumeration & Publishing (moved to class scope)
+    private func refreshInputDevices() {
+#if os(macOS)
+            // If we don’t have TCC approval yet, don’t enumerate or mutate selection
+        guard hasMicPermission else {
+            logger.warning("🔒 Mic permission not granted — skipping device refresh")
+            return
+        }
+        let devices = enumerateInputDevices()
+        inputDevicesSubject.send(devices)
+        
+            // Selection policy (race-safe): normalize current selection; treat placeholder (.none or id==0) as no selection
+        let current = self.selectedDevice
+        let selID = current.id
+        
+            // No devices at all → publish and retry soon, but DO NOT clear current selection (prevents placeholder churn)
+        guard devices.isEmpty == false else {
+            logger.error("❌ No devices fetched.")
+                // keep current selection; schedule a retry since HAL can race during route changes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.refreshInputDevices()
+            }
+            return
+        }
+        
+        if selID == 0 { // placeholder / none
+            logger.warning("⚠️ Selected device is placeholder — adopting system default or first available")
+            if let def = systemDefaultInputDevice(), devices.first(where: { $0.id == def.id }) != nil {
+                self.selectedDevice = def
+                self.selectedInputDeviceSubject.send(def)
+                logger.info("🎯 Using system default input for UI: \(def.name) [id: \(def.id)]")
+            } else if let first = devices.first {
+                self.selectedDevice = first
+                self.selectedInputDeviceSubject.send(first)
+                logger.info("🎯 Using first enumerated input for UI: \(first.name) [id: \(first.id)]")
+            }
+        } else if devices.first(where: { $0.id == selID }) != nil {
+                // Keep current if still present
+            logger.debug("🔎 Selection still valid: \(current.name) [id: \(selID)]")
+        } else {
+                // Current disappeared → adopt system default if present, else first
+            if let def = systemDefaultInputDevice(), devices.first(where: { $0.id == def.id }) != nil {
+                self.selectedDevice = def
+                self.selectedInputDeviceSubject.send(def)
+                logger.info("🎯 Adopted system default (replacement): \(def.name) [id: \(def.id)]")
+            } else if let first = devices.first {
+                self.selectedDevice = first
+                self.selectedInputDeviceSubject.send(first)
+                logger.info("🎯 Adopted first device (replacement): \(first.name) [id: \(first.id)]")
+            } else {
+                logger.error("❌ No valid input device found for selection.")
+            }
+        }
+#else
+            // Non-macOS: optionally populate via AVAudioSession.availableInputs
+        inputDevicesSubject.send([])
+#endif
+    }
+    
+#if os(macOS)
+    private func enumerateInputDevices() -> [InputAudioDevice] {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &dataSize) == noErr else { return [] }
+        let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
+        var ids = [AudioObjectID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &dataSize, &ids) == noErr else { return [] }
+        
+        func deviceHasInput(_ id: AudioObjectID) -> Bool {
+            var streamAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyStreamConfiguration,
+                mScope: kAudioObjectPropertyScopeInput,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var size: UInt32 = 0
+            guard AudioObjectGetPropertyDataSize(id, &streamAddr, 0, nil, &size) == noErr, size > 0 else { return false }
+            let buf = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<Int8>.alignment)
+            defer { buf.deallocate() }
+            return AudioObjectGetPropertyData(id, &streamAddr, 0, nil, &size, buf) == noErr && buf.bindMemory(to: AudioBufferList.self, capacity: 1).pointee.mNumberBuffers > 0
+        }
+        
+        func deviceName(_ id: AudioObjectID) -> String {
+            var nameAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioObjectPropertyName,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var nameSize: UInt32 = 0
+            guard AudioObjectGetPropertyDataSize(id, &nameAddr, 0, nil, &nameSize) == noErr else { return "Audio Device" }
+            let ptr = UnsafeMutableRawPointer.allocate(byteCount: Int(nameSize), alignment: MemoryLayout<Int8>.alignment)
+            defer { ptr.deallocate() }
+            guard AudioObjectGetPropertyData(id, &nameAddr, 0, nil, &nameSize, ptr) == noErr else { return "Audio Device" }
+            return (ptr.bindMemory(to: CFString.self, capacity: 1).pointee as String)
+        }
+        
+        var result: [InputAudioDevice] = []
+        for id in ids where deviceHasInput(id) {
+            let name = deviceName(id)
+            result.append(InputAudioDevice(id: id, name: name, channelCount: 2))
+        }
+        return result
+    }
+    
+    private var deviceListenerInstalled = false
+    private func installDeviceChangeListener() {
+        guard !deviceListenerInstalled else { return }
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let callback: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            guard let self = self else { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.refreshInputDevices()
+            }
+        }
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, nil, callback)
+        deviceListenerInstalled = true
+    }
+    
+        /// Listen for macOS default input changes (System Settings → Sound → Input). When it changes,
+        /// adopt the new system default in-app and retarget the engine/tap, without forcing the system default back.
+    private func installDefaultInputChangeListener() {
+        guard !defaultListenerInstalled else { return }
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let callback: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            guard let self = self else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.refreshInputDevices()
+                if let def = self.systemDefaultInputDevice() {
+                    self.selectedDevice = def
+                    self.selectedInputDeviceSubject.send(def)
+                    self.logger.info("🔔 System default input changed → adopting: \(def.name) [id: \(def.id)]")
+                        // Restart engine permission‑aware to retarget input node and reinstall the tap
+                    self.pendingTapRetry?.cancel(); self.pendingTapRetry = nil
+                    self.tapRetryCount = 0
+                    self.verifyMicPermissionThen { [weak self] in
+                        guard let self = self else { return }
+                        if self.engine.isRunning { self.engine.stop() }
+                        if self.tapInstalled { self.engine.inputNode.removeTap(onBus: 0); self.tapInstalled = false }
+                        if !self.isStarting { self.startEngine() }
+                    }
+                }
+            }
+        }
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, nil, callback)
+        defaultListenerInstalled = true
+    }
+#endif
+    
+        // MARK: - Permissions
+    private func ensureMicPermission(_ done: @escaping @Sendable (Bool) -> Void) {
+#if os(macOS)
+        let st = AVCaptureDevice.authorizationStatus(for: .audio)
+        switch st {
+        case .authorized:
+            self.hasMicPermission = true
+            done(true)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                DispatchQueue.main.async {
+                    self.hasMicPermission = granted
+                    done(granted)
+                }
+            }
+        default:
+            self.hasMicPermission = false
+            done(false)
+        }
+#else
+        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                self.hasMicPermission = granted
+                done(granted)
             }
         }
 #endif
     }
     
-        // MARK: - Helper to get current available devices
-    private var availableDevices: [InputAudioDevice] {
-        var devices: [InputAudioDevice] = []
-#if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        devices = session.availableInputs?.map {
-            InputAudioDevice(id: $0.uid, name: $0.portName)
-        } ?? []
-#else
-        devices = InputAudioDevice.fetchAvailableDevices()
-            .filter { $0.channelCount > 0 }
-            // Exclude .none
-        devices = devices.filter { $0 != InputAudioDevice.none }
-#endif
-        return devices
+#if os(macOS)
+        /// Returns the current system default input device (id + name). Channel count is set to 2 as a safe default.
+    private func systemDefaultInputDevice() -> InputAudioDevice? {
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var devID = AudioObjectID(0)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        let st = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &devID)
+        guard st == noErr, devID != 0 else { return nil }
+        
+            // Fetch the device name for display
+        var nameAddr = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var nameSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(devID, &nameAddr, 0, nil, &nameSize) == noErr else {
+            return InputAudioDevice(id: devID, name: "Default Input", channelCount: 2)
+        }
+        let namePtr = UnsafeMutableRawPointer.allocate(byteCount: Int(nameSize), alignment: MemoryLayout<Int8>.alignment)
+        defer { namePtr.deallocate() }
+        guard AudioObjectGetPropertyData(devID, &nameAddr, 0, nil, &nameSize, namePtr) == noErr else {
+            return InputAudioDevice(id: devID, name: "Default Input", channelCount: 2)
+        }
+        let cfStr = namePtr.bindMemory(to: CFString.self, capacity: 1).pointee
+        let name = cfStr as String
+        return InputAudioDevice(id: devID, name: name, channelCount: 2)
     }
     
-    private func writeStatsToSharedDefaults(_ stats: AudioStats) {
-        do {
-            let data = try JSONEncoder().encode(stats)
-            sharedDefaults?.set(data, forKey: "latestAudioStats")
-        } catch {
-            logger.error("❌ Failed to encode AudioStats for widget: \(error.localizedDescription)")
+    private func switchDefaultInputToSelected() {
+        guard selectedDevice != .none else { return }
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var dev = selectedDevice.id
+        let size = UInt32(MemoryLayout<AudioObjectID>.size)
+        let st = AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, size, &dev)
+        if st == noErr {
+            logger.info("🔀 Default input set to \(self.selectedDevice.name) [id: \(self.selectedDevice.id)]")
+        } else {
+            logger.error("❌ Could not set default input (\(st))")
         }
+        
+    #if os(macOS)
+            if forceSystemDefaultToSelected { self.switchDefaultInputToSelected() }
+    #endif
+        
     }
+#endif
+    
 }

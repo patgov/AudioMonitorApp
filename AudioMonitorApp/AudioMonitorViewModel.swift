@@ -1,145 +1,168 @@
-import SwiftUI
-import Combine
-import WidgetKit
-
+    // NOTE: AudioMonitorViewModel is @MainActor-isolated. All property mutation, @Published updates, and Combine publisher/subscriber logic must occur on the main actor. Use Task {@MainActor in ...} if updating state from a background thread. UI code and all Combine sinks should assume main actor context unless explicitly documented otherwise.
     /// ViewModel responsible for driving the audio monitoring UI.
     /// Observes real-time audio levels, device selection, and status indicators.
     /// Integrates with a conforming AudioManager and LogManager.
-    ///
+
 /*
- A calibrationOffset was added to AudioMonitorViewModel, that fine-tunes the VU meter display to better match system input levels. Adjust calibrationOffset adjustments have been made, -6.0 to reduce perceived levels.
+ calibrationOffset was added to fine-tune the perceived levels on the analog VU meter.
+ Default value is -6.0 dB, which adjusts levels downward to better match expected system input levels.
+ This allows visual alignment of the needle to match perceived loudness.
  */
+
+    // AudioMonitorViewModel.swift
+    // Drives the audio monitoring UI: levels, device selection, status flags.
+
+import SwiftUI
+import Combine
+import AVFoundation
+#if os(macOS)
+import AppKit
+#endif
+
 @MainActor
-public final class AudioMonitorViewModel: ObservableObject {
+final class AudioMonitorViewModel: ObservableObject {
+        // Dependencies
+    let audioManager: any AudioManagerProtocol
+    let logManager: any LogManagerProtocol
+    
+        // Published state
+    @Published private(set) var latestStats: AudioStats = .zero
+    @Published var stats: AudioStats = .zero
+    @Published var leftLevel: Double = -20.0
+    @Published var rightLevel: Double = -20.0
+    
+        /// Calibration offset (dB) applied to UI levels
+    var calibrationOffset: Double = -6.0
+    
+    @Published var selectedInputDevice: InputAudioDevice = .none
+    @Published var showInputSelectionMessage: Bool = false
+    @Published var inputPickerWasUsed: Bool = false
+    
+        // Rate-limit for probe logs (avoid console spam)
+    private var lastProbeLog: Date = .distantPast
+    
     private var cancellables = Set<AnyCancellable>()
-    public let audioManager: any AudioManagerProtocol
-    private let logManager: any LogManagerProtocol
     
-        // MARK: - Published State
+    func setInputPickerUsed(_ used: Bool) { inputPickerWasUsed = used }
     
-    @Published public private(set) var latestStats: AudioStats = .zero
-    @Published public var stats: AudioStats = .zero
-    @Published public var leftLevel: Float = -80.0
-    @Published public var rightLevel: Float = -80.0
-    
-        /// Calibration offset applies to both left and right levels (in dB).
-    public var calibrationOffset: Float = -6.0
-    @Published public var selectedInputDevice: InputAudioDevice = .none
-    @Published public var showInputSelectionMessage: Bool = false
-    @Published public var inputPickerWasUsed: Bool = false
-    
-    public func setInputPickerUsed(_ used: Bool) {
-        inputPickerWasUsed = used
-    }
-    
-        // MARK: - Initialization and Subscriptions
-    
-    public init(audioManager: some AudioManagerProtocol, logManager: some LogManagerProtocol) {
+    init(audioManager: some AudioManagerProtocol, logManager: some LogManagerProtocol) {
         self.audioManager = audioManager
         self.logManager = logManager
         
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" {
             audioManager.audioStatsStream
-                .throttle(for: .milliseconds(100), scheduler: DispatchQueue.main, latest: true)
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] stats in
-                    guard let self = self else { return }
-                    guard stats.left != self.latestStats.left || stats.right != self.latestStats.right else { return }
-                    print("📥 AudioMonitorViewModel received throttled stats: \(stats)")
+                    guard let self else { return }
                     self.latestStats = stats
                     self.stats = stats
-                    print("🎯 Runtime leftLevel with offset: \(stats.left + calibrationOffset)")
-                    self.leftLevel = stats.left + calibrationOffset
-                    self.rightLevel = stats.right + calibrationOffset
+                    self.leftLevel = Double(stats.left) + self.calibrationOffset
+                    self.rightLevel = Double(stats.right) + self.calibrationOffset
                     self.logManager.update(stats: stats)
+                        // ---- Probe: non-zero peak & route check (rate-limited) ----
+                    let now = Date()
+                    if now.timeIntervalSince(self.lastProbeLog) > 1.0 {
+                        self.lastProbeLog = now
+                        
+                        let engineRunning = self.audioManager.isRunning
+                        let selectedName = self.selectedInputDevice.name
+                        let selectedID = self.selectedInputDevice.id
+                        let reportedName = stats.inputName
+                        let reportedID = stats.inputID
+                        
+                        let leftDB  = stats.left
+                        let rightDB = stats.right
+                        
+                            // Treat <= -119 dBFS as floor (silence)
+                        let floorDB: Float = -119.0
+                        let hasNonZero = (leftDB > floorDB) || (rightDB > floorDB)
+                        
+                            // Route mismatch if the device reported by stats differs from UI selection
+                        let routeMismatch = (reportedID != 0 && selectedID != 0) && (reportedID != selectedID || reportedName != selectedName)
+                        
+                        let probeMsg = String(
+                            format: "🔎 Probe | running=%@ | selected=\"%@\"[%d] | reported=\"%@\"[%d] | L=%.2f dBFS R=%.2f dBFS | peakNonZero=%@%@",
+                            engineRunning ? "true" : "false",
+                            selectedName, selectedID,
+                            reportedName, reportedID,
+                            Double(leftDB), Double(rightDB),
+                            hasNonZero ? "true" : "false",
+                            routeMismatch ? " | ⚠️ routeMismatch" : ""
+                        )
+                        print(probeMsg)
+                    }
+                        // ---- End probe ----
                 }
                 .store(in: &cancellables)
             
-            audioManager.selectedInputDeviceStream
+#if DEBUG
+            audioManager.audioStatsStream
+                .map { ($0.left, $0.right) }
                 .receive(on: DispatchQueue.main)
+                .sink { lr in
+                    print(String(format: "[AudioStats] L: %.2f R: %.2f", lr.0, lr.1))
+                }
+                .store(in: &cancellables)
+#endif
+            
+            audioManager.selectedInputDeviceStream
+                .receive(on: RunLoop.main)
                 .sink { [weak self] device in
-                        // Accept .none devices for fallback or preview cases
-                        // guard device != .none else {
-                        //     print("⚠️ Ignoring .none from selectedInputDeviceStream")
-                        //     return
-                        // }
-                    self?.selectedInputDevice = device
-                    self?.showInputSelectionMessage = (device != .none)
+                    guard let self else { return }
+                    if device.id == 0 { return } // ignore placeholder
+                    print("🎯 UI selected input: \"\(device.name)\" [id: \(device.id)]")
+                    self.selectedInputDevice = device
+                    self.showInputSelectionMessage = true
                 }
                 .store(in: &cancellables)
         }
     }
     
-        // MARK: - Audio Level Accessors
+        // Status flags
+    var isSilenceDetected: Bool { leftLevel < -60 && rightLevel < -60 }
+    var isOvermodulated: Bool { leftLevel > 0 || rightLevel > 0 }
+    var engineIsRunning: Bool { audioManager.isRunning }
+    var selectedInputName: String { selectedInputDevice.name.isEmpty ? "None" : selectedInputDevice.name }
     
-        // MARK: - Status Flags
+        // Controls
+    func stopMonitoring() { audioManager.stop() }
     
-        /// Used to display silence warning in UI. Ensure the UI reserve a fixed frame height (e.g., 20) where this is consumed to avoid jumping.
-    public var isSilenceDetected: Bool {
-        leftLevel < -60 && rightLevel < -60
-    }
-    
-    public var isOvermodulated: Bool {
-        leftLevel > 0 || rightLevel > 0
-    }
-    
-    public var engineIsRunning: Bool {
-        (audioManager as? AudioManager)?.isRunning ?? false
-    }
-    
-    public var selectedInputName: String {
-        selectedInputDevice.name.isEmpty ? "None" : selectedInputDevice.name
-    }
-    
-        // MARK: - Monitoring Controls
-    
-    func startMonitoring() {
-            // Proceed even if selectedInputDevice is .none, as audioManager may still emit valid stats
-            // guard selectedInputDevice != .none else {
-            //     print("❌ No audio device selected")
-            //     return
-            // }
-        
-        audioManager.selectDevice(selectedInputDevice)
-        audioManager.start()
-        
-            // Start publishing to UserDefaults for widget updates
-        Timer.publish(every: 1.0, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                guard let self = self else { return }
-                let defaults = UserDefaults(suiteName: "group.us.govango.AudioMonitorApp")
-                let left = self.leftLevel
-                let right = self.rightLevel
-                defaults?.set(left, forKey: "leftLevel")
-                defaults?.set(right, forKey: "rightLevel")
-                defaults?.set(Date(), forKey: "lastUpdate")
-                WidgetCenter.shared.reloadAllTimelines()
-            }
-            .store(in: &cancellables)
-    }
-    public func stopMonitoring() {
-        audioManager.stop()
-    }
-    public func selectInputDevice(_ device: InputAudioDevice) {
-        guard device != .none else {
-            print("⚠️ Selected device is .none — monitoring will not start.")
+    func selectInputDevice(_ device: InputAudioDevice) {
+        guard device.id != 0 else {
+            print("⚠️ Selected device is placeholder — not starting.")
             return
         }
         
-        audioManager.selectDevice(device)
-        audioManager.start()
+        nonisolated(unsafe) let deviceSnapshot = device
+        
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
+            Task { @MainActor in
+                if granted {
+                        // Device selection now triggers engine start automatically.
+                    self.audioManager.selectDevice(deviceSnapshot)
+                } else {
+#if os(macOS)
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                        NSWorkspace.shared.open(url)
+                    }
+#endif
+                }
+            }
+        }
     }
     
-        /// Simulates live audio level updates for preview or testing
-    public func updateLevels(left: Float, right: Float) {
+        // Manual injection for previews/tests
+    func updateLevels(left: Double, right: Double) {
         self.leftLevel = left
         self.rightLevel = right
     }
     
 #if DEBUG
-    public func _injectPreviewStats(_ stats: AudioStats) {
+    func _injectPreviewStats(_ stats: AudioStats) {
         self.latestStats = stats
+        self.stats = stats
+        self.leftLevel = Double(stats.left) + self.calibrationOffset
+        self.rightLevel = Double(stats.right) + self.calibrationOffset
     }
 #endif
 }
@@ -151,17 +174,8 @@ extension AudioMonitorViewModel {
         let dummyLogManager = PreviewSafeLogManager()
         let vm = AudioMonitorViewModel(audioManager: dummyAudioManager, logManager: dummyLogManager)
         vm._injectPreviewStats(AudioStats(left: -6.5, right: -5.2, inputName: "MockMic", inputID: 42))
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-            Task {
-                await MainActor.run {
-                    dummyAudioManager.simulateAudioLevels(
-                        left: -10 + Float.random(in: -3...3),
-                        right: -12 + Float.random(in: -3...3)
-                    )
-                }
-            }
-        }
         return vm
     }
 }
 #endif
+

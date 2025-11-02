@@ -26,12 +26,12 @@ struct VUMeterNeedle: View {
                 .stroke(lineWidth: 2)
                 .opacity(0.2)
             
-            Rectangle()
-                .fill(Color.red)
+            NeedleShape()
+                .stroke(Color.red, lineWidth: 2)
                 .frame(width: 2, height: 40)
                 .offset(y: -20)
                 .rotationEffect(needleAngle)
-                .animation(.easeOut(duration: 0.1), value: level)
+                .animation(.interpolatingSpring(stiffness: 200, damping: 20), value: needleAngle)
         }
         .frame(width: 60, height: 60)
     }

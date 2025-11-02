@@ -39,3 +39,10 @@ This document outlines the structure and components of the AudioMonitorApp, orga
 
 *(Additional files and architecture will be documented as development continues.)*
 
+
+*The arc color VU meter scale:
+ •    Gray for low-level signals
+ •    Orange for moderate
+ •    Green for optimal
+ •    Red for overmodulation (0 to +3)
+

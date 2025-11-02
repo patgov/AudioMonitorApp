@@ -9,7 +9,7 @@ import SwiftUI
 
     // MARK: - AudioManager EnvironmentKey
 private struct AudioManagerKey: EnvironmentKey {
-    static let defaultValue: AudioManagerProtocol = MainActor.assumeIsolated {
+    nonisolated(unsafe) static let defaultValue: AudioManagerProtocol = MainActor.assumeIsolated {
         DummyAudioManager()
     }
 }
@@ -23,7 +23,7 @@ extension EnvironmentValues {
 
     // MARK: - LogManager EnvironmentKey
 private struct LogManagerKey: EnvironmentKey {
-    static let defaultValue: LogManagerProtocol = MainActor.assumeIsolated {
+    nonisolated(unsafe) static let defaultValue: LogManagerProtocol = MainActor.assumeIsolated {
         DummyLogManager()
     }
 }

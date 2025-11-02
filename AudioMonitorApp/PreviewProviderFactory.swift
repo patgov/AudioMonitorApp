@@ -4,7 +4,7 @@ import SwiftUI
 enum PreviewProviderFactory {
     
     @MainActor static func makeLogManagerPreview() -> LogManager {
-        let audioManager = AudioManager()
+        let audioManager: AudioManagerProtocol = DummyAudioManager()
         let logManager = LogManager(audioManager: audioManager)
         
         logManager.addWarning(message: "Mic disconnected", channel: 0, value: -80.0)
@@ -14,13 +14,15 @@ enum PreviewProviderFactory {
     }
     
     @MainActor static func makeAudioMonitorViewModelPreview() -> AudioMonitorViewModel {
-        let audioManager = AudioManager()
+        let audioManager: AudioManagerProtocol = DummyAudioManager()
         let logManager = LogManager(audioManager: audioManager)
         return AudioMonitorViewModel(audioManager: audioManager, logManager: logManager)
     }
     
     @MainActor static func makeAudioMonitorViewPreview() -> some View {
-        let viewModel = makeAudioMonitorViewModelPreview()
-        return AudioMonitorView(viewModel: viewModel, deviceManager: AudioDeviceManager(audioManager: DummyAudioManager()))
+        let audioManager: AudioManagerProtocol = DummyAudioManager()
+        let logManager = LogManager(audioManager: audioManager)
+        let viewModel = AudioMonitorViewModel(audioManager: audioManager, logManager: logManager)
+        return AudioMonitorView(viewModel: viewModel, deviceManager: AudioDeviceManager(audioManager: audioManager))
     }
 }

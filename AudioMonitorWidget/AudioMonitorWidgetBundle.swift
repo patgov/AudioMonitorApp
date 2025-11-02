@@ -1,9 +1,9 @@
-//
-//  AudioMonitorWidgetBundle.swift
-//  AudioMonitorWidget
-//
-//  Created by Pat Govan on 6/4/25.
-//
+
+  AudioMonitorWidgetBundle.swift
+  AudioMonitorWidget
+
+  Created by Pat Govan on 6/4/25.
+
 
 import WidgetKit
 import SwiftUI

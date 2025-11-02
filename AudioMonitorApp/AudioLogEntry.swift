@@ -11,9 +11,6 @@
 import Foundation
 import SwiftUI
 
-
-import Foundation
-
 public struct AudioLogEntry: Identifiable, Hashable, Codable {
     public let id: UUID
     public let timestamp: Date

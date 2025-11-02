@@ -1,9 +1,9 @@
 import SwiftUI
 import Combine
-
+import CoreAudio
 
 struct AudioMonitorView: View {
-
+    
     @StateObject var viewModel: AudioMonitorViewModel
     @StateObject var deviceManager: AudioDeviceManager
     @State private var hasPickerBeenUsed: Bool = false
@@ -13,9 +13,19 @@ struct AudioMonitorView: View {
     @State private var smoothedLeft: Float = -20.0
     @State private var smoothedRight: Float = -20.0
     @State private var displayStats: AudioStats = .zero
-    @State private var testSignalTimer: Timer? = nil
     @State private var showAudioWarning: Bool = false
-
+    @State private var leftLevelDB: Float = -120
+    @State private var rightLevelDB: Float = -120
+    
+        // Map dBFS (-60..0) to 0..1 for level bars
+    private func levelFraction(_ db: Float) -> CGFloat {
+        let clamped = max(-60.0, min(db, 0.0))
+        return CGFloat((clamped + 60.0) / 60.0)
+    }
+    
+        // Timer publisher for test signal
+    private let timerPublisher = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    
     init(viewModel: AudioMonitorViewModel, deviceManager: AudioDeviceManager) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _deviceManager = StateObject(wrappedValue: deviceManager)
@@ -25,97 +35,54 @@ struct AudioMonitorView: View {
         }
 #endif
     }
-
+    
     var body: some View {
-        VStack(alignment: .leading) {
-            Group {
-                VStack(spacing: 28) {
-
-                    DevicePickerView(
-                        selectedDevice: $deviceManager.selected,
-                        availableDevices: deviceManager.devices
-                    )
-                    .padding(.horizontal, 20)
-                    .onChange(of: deviceManager.selected) {
-                        hasPickerBeenUsed = true
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 5) {
+                    // Title
+                Text("Stereo VU Meter")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                
+                    // Centered input device name under the title
+                Text("Input: \(deviceManager.selected.displayName)")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                
+                    // Meters centered with horizontal padding
+                AnalogVUMeterView(leftLevel: $smoothedLeft, rightLevel: $smoothedRight)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.horizontal, 24)
+                    .onAppear {
+                            // Auto-adopt the system default mic and kick the pipeline
+                        deviceManager.fetchAvailableDevices()
                         viewModel.selectInputDevice(deviceManager.selected)
-                        viewModel.startMonitoring()
                     }
-
-                        // Live audio level data passed to VU meter view
-                    VUMeterSectionView(leftLevel: smoothedLeft, rightLevel: smoothedRight)
-
-                        .onAppear {
-                            deviceManager.fetchAvailableDevices()
-
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                let stereoDevices = deviceManager.devices.filter { $0.channelCount >= 2 }
-
-                                if stereoDevices.isEmpty {
-                                    print("❌ No stereo devices found. Falling back to first available device.")
-                                    if let fallback = deviceManager.devices.first {
-                                        deviceManager.selected = fallback
-                                        print("⚠️ Using fallback: \(fallback.displayName) [\(fallback.channelCount)ch]")
-                                    } else {
-                                        print("❌ No devices available for selection.")
-                                        return
-                                    }
-                                } else {
-                                    let preferredDevice = stereoDevices.first!
-                                    deviceManager.selected = preferredDevice
-                                    print("🎯 Forced stereo device: \(preferredDevice.displayName)")
-                                }
-
-                                if deviceManager.selected.channelCount < 2 {
-                                    print("⚠️ Mono input detected — stereo VU meter will mirror left channel.")
-                                }
-
-                                viewModel.selectInputDevice(deviceManager.selected)
-                                viewModel.startMonitoring()
-
-                                hasPickerBeenUsed = false
-                            }
-                        }
-
-                        .onChange(of: viewModel.latestStats) { _, newStats in
-                            guard newStats.left != displayStats.left || newStats.right != displayStats.right else { return }
-
-                                // Clamp to VU meter range (-20 to +6) (already in dB VU scale)
-                            let clampedLeft = max(-20.0, min(newStats.left, 6.0))
-                            let clampedRight = max(-20.0, min(newStats.right, 6.0))
-
-                            smoothedLeft = clampedLeft
-                            smoothedRight = clampedRight
-
-                            DispatchQueue.main.async {
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    displayStats = AudioStats(
-                                        left: clampedLeft,
-                                        right: clampedRight,
-                                        inputName: newStats.inputName,
-                                        inputID: newStats.inputID,
-                                        timestamp: newStats.timestamp,
-                                        overmodulationCount: newStats.overmodulationCount,
-                                        silenceCount: newStats.silenceCount
-                                    )
-                                }
-                            }
-                        }
-
-                    AudioWarningView(isVisible: $showAudioWarning)
-                        .padding(.horizontal, 25)
-
-                    AudioLevelsSummaryView(
-                        leftText: smoothedLeft < -80 ? "-80" : String(format: "%.1f", smoothedLeft),
-                        rightText: smoothedRight < -80 ? "-80" : String(format: "%.1f", smoothedRight)
-                    )
-                    .padding(.horizontal, 25)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                
+            }
+            .padding(.bottom, 20)
+        
+        }
+        .onChange(of: viewModel.latestStats) { _, newStats in
+            Task { @MainActor in
+                    // Only use levels — we don't surface AudioStats in UI
+                var clampedLeft = max(-120.0, min(newStats.left, 6.0))
+                var clampedRight = max(-120.0, min(newStats.right, 6.0))
+                
+                    // Mirror mono sources so analog meter stays stereo
+                if newStats.right <= -119.9, newStats.left > -119.9 { clampedRight = clampedLeft }
+                if newStats.left  <= -119.9, newStats.right > -119.9 { clampedLeft  = clampedRight }
+                
+                smoothedLeft = clampedLeft
+                smoothedRight = clampedRight
+                
+              
             }
         }
-        .padding(.vertical, 25)
-
+        
     }
 }
 
@@ -129,48 +96,63 @@ extension AudioDeviceManager {
 }
 #endif
 
-
-
 #if DEBUG
 struct AudioMonitorView_Previews: PreviewProvider {
     static var previews: some View {
-        let mockDevice = InputAudioDevice(id: "123", uid: "mock-uid", name: "Mock Mic", audioObjectID: 1, channelCount: 2)
-            // ✅ DummyAudioManager is used here only for SwiftUI preview
+        let mockDevice = InputAudioDevice(id: 1, name: "Mock Mic", channelCount: 2)
         let dummyAudioManager = DummyAudioManager()
         let mockDeviceManager = AudioDeviceManager(audioManager: dummyAudioManager)
-
-            // Safely inject mock devices if supported
+        
         mockDeviceManager.injectMockDevices([mockDevice], selected: mockDevice)
-
+        
+        let timerRef = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+        
         return AudioMonitorView(
             viewModel: AudioMonitorViewModel.preview,
             deviceManager: mockDeviceManager
         )
-        .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-                Task { @MainActor in
-                    let left = Float.random(in: -20...0)
-                    let right = Float.random(in: -20...0)
-                    dummyAudioManager.simulateAudioLevels(left: left, right: right)
-                }
+        .onReceive(timerRef) { _ in
+            Task { @MainActor in
+                let left = Float.random(in: -20...0)
+                let right = Float.random(in: -20...0)
+                dummyAudioManager.simulateAudioLevels(left: left, right: right)
             }
         }
+        
     }
+    
 }
 #endif
 
+private struct LevelBar: View {
+    var value: CGFloat // 0..1
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 3)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.green)
+                    .frame(width: geo.size.width * max(0, min(value, 1)))
+            }
+        }
+        .frame(height: 10)
+        .accessibilityIdentifier("LevelBar")
+    }
+}
+
 struct AudioMonitorView_Live: View {
-    @StateObject private var audioManager: AudioManager
+    private let audioManager: any AudioManagerProtocol
     @StateObject private var deviceManager: AudioDeviceManager
     @StateObject private var logManager: LogManager
-
+    
     init() {
         let manager = AudioManager()
-        _audioManager = StateObject(wrappedValue: manager)
+        self.audioManager = manager
         _deviceManager = StateObject(wrappedValue: AudioDeviceManager(audioManager: manager))
-        _logManager = StateObject(wrappedValue: LogManager(audioManager: manager))
+        _logManager     = StateObject(wrappedValue: LogManager(audioManager: manager))
     }
-
+    
     var body: some View {
         AudioMonitorView(
             viewModel: AudioMonitorViewModel(audioManager: audioManager, logManager: logManager),
@@ -178,25 +160,3 @@ struct AudioMonitorView_Live: View {
         )
     }
 }
-
-#if DEBUG
-import Combine
-extension DummyAudioManager {
-        // Ensure audioStatsSubject exists as a PassthroughSubject<AudioStats, Never>
-    var audioStatsSubject: PassthroughSubject<AudioStats, Never> {
-            // If DummyAudioManager already has this property, remove this computed property and use the stored one.
-            // This is for demonstration only.
-        if let existing = objc_getAssociatedObject(self, &audioStatsSubjectKey) as? PassthroughSubject<AudioStats, Never> {
-            return existing
-        }
-        let subject = PassthroughSubject<AudioStats, Never>()
-        objc_setAssociatedObject(self, &audioStatsSubjectKey, subject, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        return subject
-    }
-    func simulateAudioLevels(left: Float, right: Float) {
-        let stats = AudioStats(left: left, right: right, inputName: "Mock Mic", inputID: 1, timestamp: Date())
-        audioStatsSubject.send(stats)
-    }
-}
-private var audioStatsSubjectKey: UInt8 = 0
-#endif
