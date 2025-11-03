@@ -63,6 +63,10 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     private let tapBufferSize: AVAudioFrameCount = 192
     
         // Normalization for level metering (convert any input to 2ch Float32 @ input sample rate before measuring)
+#if os(macOS)
+        /// Grace window to ignore rapid successive system-driven input changes (HAL flapping, AirPods reconnects)
+    private var inputAutoSelectGraceUntil: Date? = nil
+#endif
     private var meterConverter: AVAudioConverter? = nil
     private var meterFormat: AVAudioFormat? = nil
 #if os(macOS)
@@ -74,6 +78,10 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     private var isSwitchingDefaultInput = false
         /// Current snapshot of available input devices (computed on demand)
     private var inputDevices: [InputAudioDevice] { enumerateInputDevices() }
+        /// Engine restart backoff for transient HAL failures (-10877, server failed to start)
+    private var engineRestartRetryCount = 0
+    private let engineRestartRetryMax = 5
+    private let engineRestartRetryDelay: TimeInterval = 0.6
 #endif
     
     public var isRunning: Bool { engine.isRunning }
@@ -237,9 +245,8 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             // Validate that the current input node exposes at least 1 input channel
         let probeFormat = input.inputFormat(forBus: 0)
         if probeFormat.channelCount == 0 {
-            logger.error("❌ Input node reports 0 channels — scheduling retry")
-                // Defer a retry to allow HAL to settle after a route change
-            scheduleTapRetry(reason: "zero-channel input")
+            logger.error("❌ Input node reports 0 channels — scheduling engine restart")
+            scheduleEngineRestart(reason: "zero-channel input", delay: 0.6)
             return
         }
         input.removeTap(onBus: 0)
@@ -274,8 +281,13 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             logger.info("🎧 Engine started (\(fmt.channelCount)ch @ \(fmt.sampleRate) Hz)")
         } catch {
             logger.error("❌ Engine failed to start: \(error.localizedDescription)")
+            scheduleEngineRestart(reason: "engine start failed: \(error.localizedDescription)")
             return
         }
+            // On successful start, clear engine restart backoff
+#if os(macOS)
+        engineRestartRetryCount = 0
+#endif
         
         let tapBlock = makeAudioTap()
         input.installTap(onBus: 0, bufferSize: tapBufferSize, format: nil, block: tapBlock)
@@ -287,6 +299,21 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     }
     
     private func scheduleTapRetry(reason: String) {
+#if os(macOS)
+        func scheduleEngineRestart(reason: String, delay: TimeInterval? = nil) {
+            guard engineRestartRetryCount < engineRestartRetryMax else {
+                logger.error("🛑 Engine restart retry limit reached — giving up (")
+                return
+            }
+            engineRestartRetryCount += 1
+            let d = delay ?? engineRestartRetryDelay
+            DispatchQueue.main.asyncAfter(deadline: .now() + d) { [weak self] in
+                guard let self = self else { return }
+                self.logger.warning("🔁 Restarting audio engine (attempt \(self.engineRestartRetryCount)) – \(reason)")
+                self.startEngine()
+            }
+        }
+#endif
         guard engine.isRunning else { return }
         guard tapRetryCount < tapRetryMax else { return }
         tapRetryCount += 1
@@ -537,6 +564,11 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         let devices = enumerateInputDevices()
         inputDevicesSubject.send(devices)
         
+        if let grace = inputAutoSelectGraceUntil, grace > Date() {
+            logger.info("⏱️ Skipping auto-select (within grace window after system change)")
+            return
+        }
+        
             // Selection policy (race-safe): normalize current selection; treat placeholder (.none or id==0) as no selection
         let current = self.selectedDevice
         let selID = current.id
@@ -696,6 +728,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                 self.selectedDevice = def
                 self.selectedInputDeviceSubject.send(def)
                 self.logger.info("🔔 System default input changed → adopting: \(def.name) [id: \(def.id)]")
+                self.inputAutoSelectGraceUntil = Date().addingTimeInterval(1.0)
                     // Restart engine permission‑aware to retarget input node and reinstall the tap
                 self.pendingTapRetry?.cancel(); self.pendingTapRetry = nil
                 self.tapRetryCount = 0
