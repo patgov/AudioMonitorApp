@@ -259,7 +259,8 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         let mixer = engine.mainMixerNode
         mixer.outputVolume = 0.0 // analysis only; no monitoring
         engine.disconnectNodeInput(mixer)
-        engine.connect(input, to: mixer, format: input.inputFormat(forBus: 0))
+            // Let AVAudioEngine handle sample-rate/channel conversion between the input node and mixer
+        engine.connect(input, to: mixer, format: nil)
         
             // Ensure mixer is connected to output so the render graph pulls samples
         engine.disconnectNodeInput(engine.outputNode)
@@ -414,8 +415,9 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             }
             
             guard let out = outBuffer else {
-                    // Treat as silence on conversion failure to avoid false positives
-                DispatchQueue.main.async { [weak self] in self?.processLevels(left: -120, right: -120) }
+                    // If conversion failed, fall back to analyzing the original buffer so meters stay responsive
+                let (fallbackL, fallbackR) = Self.computeLevels(from: buffer)
+                DispatchQueue.main.async { [weak self] in self?.processLevels(left: fallbackL, right: fallbackR) }
                 return
             }
             let (rawL, rawR) = Self.computeLevels(from: out)
