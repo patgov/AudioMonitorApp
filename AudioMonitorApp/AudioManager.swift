@@ -67,7 +67,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     private var meterFormat: AVAudioFormat? = nil
 #if os(macOS)
         /// Do NOT force the macOS System Settings default input to our selection unless explicitly enabled.
-    private var forceSystemDefaultToSelected = true
+    private var forceSystemDefaultToSelected = false
         /// Tracks whether we've registered a listener for default input changes.
     private var defaultListenerInstalled = false
         /// Prevent recursive/default-switch feedback loops
