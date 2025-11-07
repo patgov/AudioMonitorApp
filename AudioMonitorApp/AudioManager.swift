@@ -48,6 +48,24 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     private let tapRetryDelay: TimeInterval = 0.25
     private var pendingTapRetry: DispatchWorkItem? = nil
     
+        // MARK: - Smoothing & Silence
+    private var smoothedLeft: Float = -80
+    private var smoothedRight: Float = -80
+    private let smoothing: Float = 0.12
+        /// Levels below this threshold are treated as silence to avoid false "hot" idles on some devices.
+    private let noiseGateDB: Float = -90
+    private var silentCount = 0
+    
+        // Per-device adaptive noise floor (for display/camera/loopback-ish inputs)
+    private var learnedNoiseFloor: Float = -120
+    private var learnedNoiseFloorSamples: Int = 0
+    private let noiseFloorLearnWindow: Int = 50
+    private let noiseFloorSlack: Float = 0.8
+    
+        // Wait before learning noise floor after a route/device change
+    private var noiseFloorLearnNotBefore: Date? = nil
+    
+    
 #if !os(macOS)
     private let session = AVAudioSession.sharedInstance()
 #endif
@@ -86,13 +104,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     
     public var isRunning: Bool { engine.isRunning }
     
-        // MARK: - Smoothing & Silence
-    private var smoothedLeft: Float = -80
-    private var smoothedRight: Float = -80
-    private let smoothing: Float = 0.12
-        /// Levels below this threshold are treated as silence to avoid false "hot" idles on some devices.
-    private let noiseGateDB: Float = -90
-    private var silentCount = 0
+     
     
         // MARK: - Selected Device
     public private(set) var selectedDevice: InputAudioDevice = .none
@@ -106,6 +118,11 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                 // Update selection & publish immediately so UI reflects the change
             self.selectedDevice = device
             self.selectedInputDeviceSubject.send(device)
+            
+                // reset adaptive noise floor when user explicitly picks a new device
+            self.learnedNoiseFloor = -120
+            self.learnedNoiseFloorSamples = 0
+            self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
             
                 // Debounce engine restart to avoid thrashing when user scrolls the picker
             self.pendingRestartWork?.cancel()
@@ -298,22 +315,23 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         meterFormat = nil
     }
     
-    private func scheduleTapRetry(reason: String) {
 #if os(macOS)
-        func scheduleEngineRestart(reason: String, delay: TimeInterval? = nil) {
-            guard engineRestartRetryCount < engineRestartRetryMax else {
-                logger.error("🛑 Engine restart retry limit reached — giving up (")
-                return
-            }
-            engineRestartRetryCount += 1
-            let d = delay ?? engineRestartRetryDelay
-            DispatchQueue.main.asyncAfter(deadline: .now() + d) { [weak self] in
-                guard let self = self else { return }
-                self.logger.warning("🔁 Restarting audio engine (attempt \(self.engineRestartRetryCount)) – \(reason)")
-                self.startEngine()
-            }
+    private func scheduleEngineRestart(reason: String, delay: TimeInterval? = nil) {
+        guard engineRestartRetryCount < engineRestartRetryMax else {
+            logger.error("🛑 Engine restart retry limit reached — giving up (")
+            return
         }
+        engineRestartRetryCount += 1
+        let d = delay ?? engineRestartRetryDelay
+        DispatchQueue.main.asyncAfter(deadline: .now() + d) { [weak self] in
+            guard let self = self else { return }
+            self.logger.warning("🔁 Restarting audio engine (attempt \(self.engineRestartRetryCount)) – \(reason)")
+            self.startEngine()
+        }
+    }
 #endif
+    
+    private func scheduleTapRetry(reason: String) {
         guard engine.isRunning else { return }
         guard tapRetryCount < tapRetryMax else { return }
         tapRetryCount += 1
@@ -526,21 +544,48 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     }
     
     private func processLevels(left: Float, right: Float) {
-        smoothedLeft  = smoothing * left  + (1 - smoothing) * smoothedLeft
-        smoothedRight = smoothing * right + (1 - smoothing) * smoothedRight
+        var l = left
+        var r = right
+        
+        let now = Date()
+        let canLearnNow = (noiseFloorLearnNotBefore == nil) || (now >= noiseFloorLearnNotBefore!)
+        
+        if canLearnNow {
+                // 1) learn per-device idle floor during the first N buffers
+            if learnedNoiseFloorSamples < noiseFloorLearnWindow {
+                let candidate = max(l, r)
+                if candidate < -30 && candidate > -90 {
+                    learnedNoiseFloor = max(learnedNoiseFloor, candidate)
+                }
+                learnedNoiseFloorSamples += 1
+            } else {
+                    // 2) after learning, clamp values that hover around that floor to silence
+                if l > learnedNoiseFloor - noiseFloorSlack && l < learnedNoiseFloor + noiseFloorSlack {
+                    l = -120
+                }
+                if r > learnedNoiseFloor - noiseFloorSlack && r < learnedNoiseFloor + noiseFloorSlack {
+                    r = -120
+                }
+            }
+        }
+        
+            // existing smoothing logic stays the same
+        smoothedLeft  = smoothing * l  + (1 - smoothing) * smoothedLeft
+        smoothedRight = smoothing * r  + (1 - smoothing) * smoothedRight
         
         currentLeftLevel = smoothedLeft
         currentRightLevel = smoothedRight
-        
         leftLevelSubject.send(smoothedLeft)
         rightLevelSubject.send(smoothedRight)
         
-        let stats = AudioStats(left: smoothedLeft, right: smoothedRight,
-                               inputName: selectedDevice.name, inputID: Int(selectedDevice.id))
+        let stats = AudioStats(left: smoothedLeft,
+                               right: smoothedRight,
+                               inputName: selectedDevice.name,
+                               inputID: Int(selectedDevice.id))
         statsSubject.send(stats)
         
-            // Silence probe with tap watchdog
-        if left <= -119 && right <= -119 {
+            // silence watchdog unchanged
+        if l <= -119 && r <= -119 {
             silentCount += 1
             if silentCount == 20 {
                 logger.warning("🛑 Silent input detected.")
@@ -728,6 +773,12 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                 self.selectedDevice = def
                 self.selectedInputDeviceSubject.send(def)
                 self.logger.info("🔔 System default input changed → adopting: \(def.name) [id: \(def.id)]")
+                
+                    // reset adaptive noise floor for the new system-selected device
+                self.learnedNoiseFloor = -120
+                self.learnedNoiseFloorSamples = 0
+                self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
+                
                 self.inputAutoSelectGraceUntil = Date().addingTimeInterval(1.0)
                     // Restart engine permission‑aware to retarget input node and reinstall the tap
                 self.pendingTapRetry?.cancel(); self.pendingTapRetry = nil
