@@ -104,7 +104,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     
     public var isRunning: Bool { engine.isRunning }
     
-     
+    
     
         // MARK: - Selected Device
     public private(set) var selectedDevice: InputAudioDevice = .none
@@ -123,6 +123,14 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             self.learnedNoiseFloor = -120
             self.learnedNoiseFloorSamples = 0
             self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
+            
+                // hard-reset metering state so new device doesn't inherit previous levels
+            self.smoothedLeft = -80
+            self.smoothedRight = -80
+            self.currentLeftLevel = -80
+            self.currentRightLevel = -80
+            self.leftLevelSubject.send(-80)
+            self.rightLevelSubject.send(-80)
             
                 // Debounce engine restart to avoid thrashing when user scrolls the picker
             self.pendingRestartWork?.cancel()
@@ -386,13 +394,20 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         return { [weak self] buffer, _ in
             guard let self = self else { return }
             
-            guard buffer.frameLength > 0 else { return }
+            guard buffer.frameLength > 0 else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.processLevels(left: -120, right: -120)
+                }
+                return
+            }
             
 #if os(macOS)
-            if let vol = self.currentSelectedInputDeviceVolumeScalar(), vol <= 0.01 {
-                    // Selected input's volume is effectively zero — treat as silence
-                DispatchQueue.main.async { [weak self] in self?.processLevels(left: -120, right: -120) }
-                return
+            if let vol = self.currentSelectedInputDeviceVolumeScalar() {
+                if vol <= 0.01 {
+                        // Device explicitly reports an input volume of ~0 → mute
+                    DispatchQueue.main.async { [weak self] in self?.processLevels(left: -120, right: -120) }
+                    return
+                }
             }
 #endif
             
@@ -778,6 +793,14 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                 self.learnedNoiseFloor = -120
                 self.learnedNoiseFloorSamples = 0
                 self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
+                
+                    // hard-reset metering state for system-driven input change
+                self.smoothedLeft = -80
+                self.smoothedRight = -80
+                self.currentLeftLevel = -80
+                self.currentRightLevel = -80
+                self.leftLevelSubject.send(-80)
+                self.rightLevelSubject.send(-80)
                 
                 self.inputAutoSelectGraceUntil = Date().addingTimeInterval(1.0)
                     // Restart engine permission‑aware to retarget input node and reinstall the tap
