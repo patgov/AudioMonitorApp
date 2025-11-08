@@ -124,14 +124,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             self.learnedNoiseFloorSamples = 0
             self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
             
-                // hard-reset metering state so new device doesn't inherit previous levels
-            self.smoothedLeft = -80
-            self.smoothedRight = -80
-            self.currentLeftLevel = -80
-            self.currentRightLevel = -80
-            self.leftLevelSubject.send(-80)
-            self.rightLevelSubject.send(-80)
-            
+             
                 // Debounce engine restart to avoid thrashing when user scrolls the picker
             self.pendingRestartWork?.cancel()
             let work = DispatchWorkItem { [weak self] in
@@ -304,11 +297,21 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             try engine.start()
             let fmt = input.inputFormat(forBus: 0)
             logger.info("🎧 Engine started (\(fmt.channelCount)ch @ \(fmt.sampleRate) Hz)")
+            
+                // reset meter only after we actually have a running engine on the new device
+            self.smoothedLeft = -80
+            self.smoothedRight = -80
+            self.currentLeftLevel = -80
+            self.currentRightLevel = -80
+            self.leftLevelSubject.send(-80)
+            self.rightLevelSubject.send(-80)
         } catch {
             logger.error("❌ Engine failed to start: \(error.localizedDescription)")
             scheduleEngineRestart(reason: "engine start failed: \(error.localizedDescription)")
             return
         }
+         
+        
             // On successful start, clear engine restart backoff
 #if os(macOS)
         engineRestartRetryCount = 0
@@ -794,23 +797,23 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                 self.learnedNoiseFloorSamples = 0
                 self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
                 
-                    // hard-reset metering state for system-driven input change
-                self.smoothedLeft = -80
-                self.smoothedRight = -80
-                self.currentLeftLevel = -80
-                self.currentRightLevel = -80
-                self.leftLevelSubject.send(-80)
-                self.rightLevelSubject.send(-80)
+                
                 
                 self.inputAutoSelectGraceUntil = Date().addingTimeInterval(1.0)
                     // Restart engine permission‑aware to retarget input node and reinstall the tap
                 self.pendingTapRetry?.cancel(); self.pendingTapRetry = nil
                 self.tapRetryCount = 0
-                self.verifyMicPermissionThen { [weak self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                     guard let self = self else { return }
-                    if self.engine.isRunning { self.engine.stop() }
-                    if self.tapInstalled { self.engine.inputNode.removeTap(onBus: 0); self.tapInstalled = false }
-                    if !self.isStarting { self.startEngine() }
+                    self.verifyMicPermissionThen { [weak self] in
+                        guard let self = self else { return }
+                        if self.engine.isRunning { self.engine.stop() }
+                        if self.tapInstalled {
+                            self.engine.inputNode.removeTap(onBus: 0)
+                            self.tapInstalled = false
+                        }
+                        if !self.isStarting { self.startEngine() }
+                    }
                 }
             }
         }
