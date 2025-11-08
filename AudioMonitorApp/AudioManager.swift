@@ -119,12 +119,26 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             self.selectedDevice = device
             self.selectedInputDeviceSubject.send(device)
             
+                // reset per-device transient state so the previous device's silence/tap state doesn't leak
+            self.silentCount = 0
+            self.tapRetryCount = 0
+            self.pendingTapRetry?.cancel()
+            self.pendingTapRetry = nil
+            
+                // push UI to a known quiet state while the engine retargets
+            self.smoothedLeft = -120
+            self.smoothedRight = -120
+            self.currentLeftLevel = -120
+            self.currentRightLevel = -120
+            self.leftLevelSubject.send(-120)
+            self.rightLevelSubject.send(-120)
+            
                 // reset adaptive noise floor when user explicitly picks a new device
             self.learnedNoiseFloor = -120
             self.learnedNoiseFloorSamples = 0
             self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
             
-             
+            
                 // Debounce engine restart to avoid thrashing when user scrolls the picker
             self.pendingRestartWork?.cancel()
             let work = DispatchWorkItem { [weak self] in
@@ -150,6 +164,29 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             }
             self.pendingRestartWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+            
+                // Fragile, continuity-style devices (iPhone, Lumina/camera) often come up in two phases:
+                // 1) placeholder/None, then 2) the real 1–2ch stream a moment later.
+                // The first restart above may bind to the placeholder; schedule a follow-up restart
+                // to retarget the real stream once it has appeared.
+            let lower = device.name.lowercased()
+            if lower.contains("iphone") || lower.contains("lumina") || lower.contains("camera") {
+                let followup = DispatchWorkItem { [weak self] in
+                    guard let self = self else { return }
+                        // Only do this if the user is still on this device
+                    if self.selectedDevice.id != device.id { return }
+                    self.verifyMicPermissionThen { [weak self] in
+                        guard let self = self else { return }
+                        if self.engine.isRunning { self.engine.stop() }
+                        if self.tapInstalled {
+                            self.engine.inputNode.removeTap(onBus: 0)
+                            self.tapInstalled = false
+                        }
+                        self.startEngine()
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.1, execute: followup)
+            }
         }
     }
     
@@ -310,7 +347,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             scheduleEngineRestart(reason: "engine start failed: \(error.localizedDescription)")
             return
         }
-         
+        
         
             // On successful start, clear engine restart backoff
 #if os(macOS)
@@ -394,8 +431,23 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     
         // MARK: - Audio Tap
     private func makeAudioTap() -> (AVAudioPCMBuffer, AVAudioTime) -> Void {
+            // capture the device we had when we installed the tap
+        let tapDeviceID = self.selectedDevice.id
+        let tapDeviceNameLower = self.selectedDevice.name.lowercased()
+        
         return { [weak self] buffer, _ in
             guard let self = self else { return }
+            
+                // if the user changed mics after we installed this tap, ignore this buffer
+            if self.selectedDevice.id != tapDeviceID {
+                return
+            }
+            
+                // use the captured name so classification stays consistent
+            let lowerName = tapDeviceNameLower
+            
+                // ... rest of your existing tap code, but remove the old line:
+                // let lowerName = self.selectedDevice.name.lowercased()
             
             guard buffer.frameLength > 0 else {
                 DispatchQueue.main.async { [weak self] in
@@ -404,11 +456,22 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                 return
             }
             
+                //#if os(macOS)
 #if os(macOS)
-            if let vol = self.currentSelectedInputDeviceVolumeScalar() {
+            let skipVolumeMute =
+            lowerName.contains("lumina") ||
+            lowerName.contains("camera") ||
+            lowerName.contains("display") ||
+            lowerName.contains("ultrafine") ||
+            lowerName.contains("ak4571") ||
+            lowerName.contains("iphone") ||
+            lowerName.contains("microphone")
+            if !skipVolumeMute, let vol = self.currentSelectedInputDeviceVolumeScalar() {
                 if vol <= 0.01 {
                         // Device explicitly reports an input volume of ~0 → mute
-                    DispatchQueue.main.async { [weak self] in self?.processLevels(left: -120, right: -120) }
+                    DispatchQueue.main.async { [weak self] in
+                        self?.processLevels(left: -120, right: -120)
+                    }
                     return
                 }
             }
@@ -478,15 +541,32 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             }
             
             guard let out = outBuffer else {
-                    // If conversion failed, fall back to analyzing the original buffer so meters stay responsive
-                let (fallbackL, fallbackR) = Self.computeLevels(from: buffer)
-                DispatchQueue.main.async { [weak self] in self?.processLevels(left: fallbackL, right: fallbackR) }
+                let (fallbackL, fallbackR) = Self.computeLevelsFallback(from: buffer)
+                DispatchQueue.main.async { [weak self] in
+                    self?.processLevels(left: fallbackL, right: fallbackR)
+                }
                 return
             }
+            
             let (rawL, rawR) = Self.computeLevels(from: out)
-                // Apply a small noise gate so muted/idle inputs don't show as "hot" due to device bias/noise.
-            let dBL = (rawL < self.noiseGateDB) ? -120 : rawL
-            let dBR = (rawR < self.noiseGateDB) ? -120 : rawR
+            let skipGate =
+            lowerName.contains("ak4571") ||
+            lowerName.contains("lumina") ||
+            lowerName.contains("camera") ||
+            lowerName.contains("display") ||
+            lowerName.contains("ultrafine") ||
+            lowerName.contains("iphone") ||
+            lowerName.contains("microphone")
+            let dBL: Float
+            let dBR: Float
+            if skipGate {
+                dBL = rawL
+                dBR = rawR
+            } else {
+                    // Apply a small noise gate so muted/idle inputs don't show as "hot" due to device bias/noise.
+                dBL = (rawL < self.noiseGateDB) ? -120 : rawL
+                dBR = (rawR < self.noiseGateDB) ? -120 : rawR
+            }
             DispatchQueue.main.async { [weak self] in
                 self?.processLevels(left: dBL, right: dBR)
             }
@@ -561,14 +641,84 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         return (-120, -120)
     }
     
+    private static func computeLevelsFallback(from buffer: AVAudioPCMBuffer) -> (Float, Float) {
+        let frameCount = Int(buffer.frameLength)
+        let channels = Int(buffer.format.channelCount)
+        guard frameCount > 0, channels > 0 else { return (-120, -120) }
+        
+            // 1) Try Int16 (common for continuity / iPhone-like devices)
+        if let int16Data = buffer.int16ChannelData {
+            let scale: Float = 1.0 / Float(Int16.max)
+            var accL: Float = 0
+            var accR: Float = 0
+            
+            for i in 0..<frameCount {
+                let sL = Float(int16Data[0][i]) * scale
+                accL += sL * sL
+                if channels > 1 {
+                    let sR = Float(int16Data[1][i]) * scale
+                    accR += sR * sR
+                }
+            }
+            
+            let rmsL = sqrtf(accL / Float(frameCount))
+            let rmsR = channels > 1 ? sqrtf(accR / Float(frameCount)) : rmsL
+            
+            let dBL = max(-120.0, min(20 * log10f(max(rmsL, 1e-6)), 0.0))
+            let dBR = max(-120.0, min(20 * log10f(max(rmsR, 1e-6)), 0.0))
+            return (dBL, dBR)
+        }
+        
+            // 2) Try Int32
+        if let int32Data = buffer.int32ChannelData {
+            let scale: Float = 1.0 / Float(Int32.max)
+            var accL: Float = 0
+            var accR: Float = 0
+            
+            for i in 0..<frameCount {
+                let sL = Float(int32Data[0][i]) * scale
+                accL += sL * sL
+                if channels > 1 {
+                    let sR = Float(int32Data[1][i]) * scale
+                    accR += sR * sR
+                }
+            }
+            
+            let rmsL = sqrtf(accL / Float(frameCount))
+            let rmsR = channels > 1 ? sqrtf(accR / Float(frameCount)) : rmsL
+            
+            let dBL = max(-120.0, min(20 * log10f(max(rmsL, 1e-6)), 0.0))
+            let dBR = max(-120.0, min(20 * log10f(max(rmsR, 1e-6)), 0.0))
+            return (dBL, dBR)
+        }
+        
+            // 3) Don’t know the sample type → keep silent
+        return (-120, -120)
+    }
+    
+    
     private func processLevels(left: Float, right: Float) {
         var l = left
         var r = right
         
+            // Devices like displays, iPhones, and Lumina cameras often sit at a fixed dB.
+            // If we run adaptive floor on them, we “learn” that idle and clamp to silence.
+        let lowerName = selectedDevice.name.lowercased()
+        let isLuminaLike = lowerName.contains("lumina") || lowerName.contains("camera")
+        let isContinuityIPhone = lowerName.contains("iphone")
+        let skipAdaptiveNoiseFloor =
+        lowerName.contains("display") ||
+        lowerName.contains("ultrafine") ||
+        lowerName.contains("iphone") ||
+        lowerName.contains("lumina") ||
+        lowerName.contains("camera") ||
+        lowerName.contains("ak4571") ||
+        lowerName.contains("microphone")
+        
         let now = Date()
         let canLearnNow = (noiseFloorLearnNotBefore == nil) || (now >= noiseFloorLearnNotBefore!)
         
-        if canLearnNow {
+        if !skipAdaptiveNoiseFloor && canLearnNow {
                 // 1) learn per-device idle floor during the first N buffers
             if learnedNoiseFloorSamples < noiseFloorLearnWindow {
                 let candidate = max(l, r)
@@ -587,9 +737,31 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             }
         }
         
+            // Lumina / camera-like devices sometimes sit at a fixed mid band ("hot but not responsive").
+            // If we see a level in that band that barely moves, treat it as idle and clamp to silence so UI can recover.
+        if isLuminaLike || isContinuityIPhone {
+            let stuckBandMin: Float = -60
+            let stuckBandMax: Float = -40
+            if l > stuckBandMin && l < stuckBandMax && abs(l - smoothedLeft) < 1.5 {
+                l = -120
+            }
+            if r > stuckBandMin && r < stuckBandMax && abs(r - smoothedRight) < 1.5 {
+                r = -120
+            }
+        }
+        
             // existing smoothing logic stays the same
-        smoothedLeft  = smoothing * l  + (1 - smoothing) * smoothedLeft
-        smoothedRight = smoothing * r  + (1 - smoothing) * smoothedRight
+            // device-aware smoothing: some devices (AK4571, Lumina/camera) look "stuck" with heavy smoothing
+        let name = lowerName
+        if name.contains("ak4571") || name.contains("lumina") || name.contains("camera") || name.contains("iphone") || name.contains("microphone") {
+                // pass through current reading so UI shows immediate change
+            smoothedLeft = l
+            smoothedRight = r
+        } else {
+                // default smoothing
+            smoothedLeft  = smoothing * l  + (1 - smoothing) * smoothedLeft
+            smoothedRight = smoothing * r  + (1 - smoothing) * smoothedRight
+        }
         
         currentLeftLevel = smoothedLeft
         currentRightLevel = smoothedRight
@@ -602,12 +774,17 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                                inputID: Int(selectedDevice.id))
         statsSubject.send(stats)
         
-            // silence watchdog unchanged
+            // Device-aware silence watchdog: iPhone/Continuity tends to come up silent, so retry sooner.
+            // Lumina/camera-like devices can show a constant floor, so don't hammer the tap for them.
+        let watchSilence = !(isLuminaLike || isContinuityIPhone)
         if l <= -119 && r <= -119 {
-            silentCount += 1
-            if silentCount == 20 {
-                logger.warning("🛑 Silent input detected.")
-                scheduleTapRetry(reason: "sustained silence")
+            if watchSilence {
+                silentCount += 1
+                let maxSilentFrames = isContinuityIPhone ? 6 : 20
+                if silentCount == maxSilentFrames {
+                    logger.warning("🛑 Silent input detected (\(lowerName)).")
+                    scheduleTapRetry(reason: "\(lowerName) sustained silence")
+                }
             }
         } else {
             silentCount = 0
@@ -615,6 +792,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             pendingTapRetry?.cancel(); pendingTapRetry = nil
         }
     }
+    
     
         // MARK: - Device Enumeration & Publishing (moved to class scope)
     private func refreshInputDevices() {
@@ -915,3 +1093,4 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
 #endif
     
 }
+
