@@ -1,4 +1,4 @@
-
+#if DEBUG
 import SwiftUI
 import CoreAudio
 
@@ -19,7 +19,7 @@ private struct AudioMonitorPreviewWrapper: View {
         name: "🎙️ Mock Mic",
         channelCount: 2
     )
-
+    
     
     init() {
         let dummy = Self.dummy
@@ -27,7 +27,9 @@ private struct AudioMonitorPreviewWrapper: View {
         let mock = InputAudioDevice(id: AudioObjectID(1), name: "🎙️ Mock Mic", channelCount: 2)
         
         let dm = AudioDeviceManager(audioManager: dummy)
+#if DEBUG
         dm.injectMockDevices([mock], selected: mock)
+#endif
         
         _deviceManager = StateObject(wrappedValue: dm)
         _viewModel     = StateObject(wrappedValue: AudioMonitorViewModel(
@@ -41,3 +43,4 @@ private struct AudioMonitorPreviewWrapper: View {
             .onAppear { viewModel.updateLevels(left: -10.0, right: -8.0) }
     }
 }
+#endif

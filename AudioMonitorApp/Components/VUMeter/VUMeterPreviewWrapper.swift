@@ -1,30 +1,32 @@
+
+
 import SwiftUI
 
 struct VUMeterPreviewWrapper: View {
     @ObservedObject var viewModel: AudioMonitorViewModel
-
+    
     func angleForLevel(_ level: Double) -> Angle {
         let clampedLevel = min(max(level, -60), 0)
         let degrees = (clampedLevel + 20) * (180.0 / 23.0) - 90
         return Angle(degrees: degrees)
     }
-
+    
     func meterView(for level: Double) -> some View {
         GeometryReader { geometry in
             let size = min(geometry.size.width, geometry.size.height)
             let angle = angleForLevel(level)
-
+            
             ZStack {
                 Image("VUBackground")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: size, height: size)
-
+                
                 Image("VUGraphics")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: size, height: size)
-
+                
                 Image("VUNeedle")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
@@ -34,7 +36,7 @@ struct VUMeterPreviewWrapper: View {
             }
         }
     }
-
+    
     var body: some View {
         HStack(spacing: 40) {
             meterView(for: viewModel.leftLevel)
@@ -44,6 +46,8 @@ struct VUMeterPreviewWrapper: View {
     }
 }
 
+#if DEBUG
 #Preview(traits: .sizeThatFitsLayout) {
     VUMeterPreviewWrapper(viewModel: AudioMonitorViewModel.preview)
 }
+#endif

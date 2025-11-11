@@ -25,8 +25,14 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         // Per-channel level streams required by AudioManagerProtocol
     private let leftLevelSubject = CurrentValueSubject<Float, Never>(-120)
     private let rightLevelSubject = CurrentValueSubject<Float, Never>(-120)
+    private let rawLeftLevelSubject = CurrentValueSubject<Float, Never>(-120)
+    private let rawRightLevelSubject = CurrentValueSubject<Float, Never>(-120)
+    private let isGatedSubject = CurrentValueSubject<Bool, Never>(false)
     public var leftLevelStream: AnyPublisher<Float, Never> { leftLevelSubject.eraseToAnyPublisher() }
     public var rightLevelStream: AnyPublisher<Float, Never> { rightLevelSubject.eraseToAnyPublisher() }
+    public var rawLeftLevelStream: AnyPublisher<Float, Never> { rawLeftLevelSubject.eraseToAnyPublisher() }
+    public var rawRightLevelStream: AnyPublisher<Float, Never> { rawRightLevelSubject.eraseToAnyPublisher() }
+    public var isGatedStream: AnyPublisher<Bool, Never> { isGatedSubject.eraseToAnyPublisher() }
     
         // Selected device stream required by AudioManagerProtocol
     private let selectedInputDeviceSubject = CurrentValueSubject<InputAudioDevice, Never>(.none)
@@ -53,14 +59,33 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     private var smoothedRight: Float = -80
     private let smoothing: Float = 0.12
         /// Levels below this threshold are treated as silence to avoid false "hot" idles on some devices.
-    private let noiseGateDB: Float = -90
+    private let noiseGateDB: Float = -95
     private var silentCount = 0
     
         // Per-device adaptive noise floor (for display/camera/loopback-ish inputs)
     private var learnedNoiseFloor: Float = -120
     private var learnedNoiseFloorSamples: Int = 0
     private let noiseFloorLearnWindow: Int = 50
-    private let noiseFloorSlack: Float = 0.8
+    private let noiseFloorSlack: Float = 1.5
+    
+        // Cooldown so display/Ultrafine mics don't get reclamped immediately after real activity
+    private var displayActivityCooldown: Int = 0
+    
+        // Short hold to ignore periodic downward pulses on display/LG mics
+    private var displayPulseHoldFrames: Int = 0
+    private let displayPulseHoldMax: Int = 5
+    
+        // When we detect real speech on display/LG mics, keep gating disabled briefly
+    private var displayTalkingFrames: Int = 0
+    
+        // Ignore backward pulses while talking on display/LG mics
+    private let displayDropIgnoreThreshold: Float = 6.0
+    
+        // Frame counter since engine start (for device-specific stabilization)
+    private var framesSinceEngineStart: Int = 0
+    
+        // Tracks if last frame was gated (for UI/diagnostics)
+    private var lastFrameWasGated: Bool = false
     
         // Wait before learning noise floor after a route/device change
     private var noiseFloorLearnNotBefore: Date? = nil
@@ -103,6 +128,21 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
 #endif
     
     public var isRunning: Bool { engine.isRunning }
+    
+        /// Debug helper: describes the current metering converter, if any
+    public var meterConverterInfo: String {
+        guard let converter = meterConverter else { return "meterConverter = nil" }
+        let inFmt = converter.inputFormat
+        let outFmt = converter.outputFormat
+        return "meterConverter: \(inFmt.sampleRate) Hz / \(inFmt.channelCount) ch → \(outFmt.sampleRate) Hz / \(outFmt.channelCount) ch"
+    }
+    
+        /// Manually reset the metering pipeline so the next audio buffer rebuilds it
+    public func resetMeteringPipeline() {
+        meterConverter = nil
+        meterFormat = nil
+        logger.info("🧹 Metering pipeline reset — will rebuild on next tap buffer")
+    }
     
     
     
@@ -342,6 +382,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             self.currentRightLevel = -80
             self.leftLevelSubject.send(-80)
             self.rightLevelSubject.send(-80)
+            self.framesSinceEngineStart = 0
         } catch {
             logger.error("❌ Engine failed to start: \(error.localizedDescription)")
             scheduleEngineRestart(reason: "engine start failed: \(error.localizedDescription)")
@@ -461,8 +502,6 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             let skipVolumeMute =
             lowerName.contains("lumina") ||
             lowerName.contains("camera") ||
-            lowerName.contains("display") ||
-            lowerName.contains("ultrafine") ||
             lowerName.contains("ak4571") ||
             lowerName.contains("iphone") ||
             lowerName.contains("microphone")
@@ -549,12 +588,13 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             }
             
             let (rawL, rawR) = Self.computeLevels(from: out)
+                // Forward raw (ungated) levels to the new subjects before gating/processing
+            DispatchQueue.main.async { [weak self] in
+                self?.rawLeftLevelSubject.send(rawL)
+                self?.rawRightLevelSubject.send(rawR)
+            }
             let skipGate =
             lowerName.contains("ak4571") ||
-            lowerName.contains("lumina") ||
-            lowerName.contains("camera") ||
-            lowerName.contains("display") ||
-            lowerName.contains("ultrafine") ||
             lowerName.contains("iphone") ||
             lowerName.contains("microphone")
             let dBL: Float
@@ -700,20 +740,202 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     private func processLevels(left: Float, right: Float) {
         var l = left
         var r = right
+        let originalL = l
+        let originalR = r
+        let lowerName = selectedDevice.name.lowercased()
+        let isDisplayOrUltrafine = lowerName.contains("display") || lowerName.contains("ultrafine")
+        let isLGUltraFine = lowerName.contains("lg ultrafine") || lowerName.contains("lg ultrafine display")
+        var gatedThisFrame = false
+        
+            // Force real silence through for display/LG devices
+        if isDisplayOrUltrafine && originalL <= -90 && originalR <= -90 {
+            smoothedLeft = -120
+            smoothedRight = -120
+            currentLeftLevel = -120
+            currentRightLevel = -120
+            leftLevelSubject.send(-120)
+            rightLevelSubject.send(-120)
+            let stats = AudioStats(left: -120,
+                                   right: -120,
+                                   inputName: selectedDevice.name,
+                                   inputID: Int(selectedDevice.id))
+            statsSubject.send(stats)
+            lastFrameWasGated = true
+            isGatedSubject.send(true)
+            return
+        }
+        
+            // Arm/disarm a short "talking" window for display/LG mics
+        if isDisplayOrUltrafine {
+                // if the incoming buffer clearly rises above the current smoothed value, assume real speech
+            if originalL > smoothedLeft + 2.0 || originalR > smoothedRight + 2.0 {
+                displayTalkingFrames = 10   // shorter talking window so we can decay again
+            } else if displayTalkingFrames > 0 {
+                displayTalkingFrames -= 1
+            }
+        }
+        
+            // For LG / display mics: if we're NOT in a talking window and the raw value
+            // sits in the known “fake idle” band (-70 dB … -33 dB), just publish silence
+            // and bail out. This prevents the meter from looking hot at idle while still
+            // allowing real speech (which will push levels above this band) to get through.
+        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
+            let fakeIdleMin: Float = -70   // lower end of the noisy shelf we saw in logs
+            let fakeIdleMax: Float = -33   // upper end of the noisy shelf we saw in logs
+            let rawInFakeBandL = (originalL >= fakeIdleMin && originalL <= fakeIdleMax)
+            let rawInFakeBandR = (originalR >= fakeIdleMin && originalR <= fakeIdleMax)
+            if rawInFakeBandL || rawInFakeBandR {
+                gatedThisFrame = true
+                smoothedLeft = -120
+                smoothedRight = -120
+                currentLeftLevel = smoothedLeft
+                currentRightLevel = smoothedRight
+                leftLevelSubject.send(smoothedLeft)
+                rightLevelSubject.send(smoothedRight)
+                let stats = AudioStats(left: smoothedLeft,
+                                       right: smoothedRight,
+                                       inputName: selectedDevice.name,
+                                       inputID: Int(selectedDevice.id))
+                statsSubject.send(stats)
+                lastFrameWasGated = true
+                isGatedSubject.send(true)
+                return
+            }
+        }
+        
+            // Hard idle clamp for LG / display mics: if we're not in a talking window,
+            // anything above about -60 dB is just the panel's noisy floor. Treat it as silence
+            // so the UI doesn't look "hot" at idle.
+        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
+            let displayIdleCeiling: Float = -60
+            if l > displayIdleCeiling { l = -120; gatedThisFrame = true }
+            if r > displayIdleCeiling { r = -120; gatedThisFrame = true }
+        }
+        
+            // ... inside processLevels(...) right after you compute isDisplayOrUltrafine etc.
+        
+        if isDisplayOrUltrafine {
+            let rawDropL = smoothedLeft - originalL
+            let rawDropR = smoothedRight - originalR
+            let bigDrop: Float = 10.0   // slightly bigger than noise, smaller than your 12 dB one
+            
+                // Case 1: we were already talking → always ignore the spike
+            if displayTalkingFrames > 0 {
+                if rawDropL > bigDrop && originalL > -110 {
+                    l = smoothedLeft
+                    displayTalkingFrames = max(displayTalkingFrames, 10)
+                }
+                if rawDropR > bigDrop && originalR > -110 {
+                    r = smoothedRight
+                    displayTalkingFrames = max(displayTalkingFrames, 10)
+                }
+            } else {
+                    // Case 2: we were NOT talking yet, but this looks exactly like the LG “one bad frame”
+                    // (we were around -35..-45 and suddenly got a much lower frame)
+                let wasInDisplayIdle = (smoothedLeft > -50 && smoothedLeft < -30) || (smoothedRight > -50 && smoothedRight < -30)
+                if wasInDisplayIdle {
+                    if rawDropL > bigDrop && originalL > -110 {
+                        l = smoothedLeft
+                    }
+                    if rawDropR > bigDrop && originalR > -110 {
+                        r = smoothedRight
+                    }
+                }
+            }
+        }
+        
+            // Some display/LG mics report a periodic "low" buffer (-60…-80 dB) even while idle around -40 dB.
+            // If we see a sudden large drop compared to our current smoothed value, hold the previous value
+            // for a couple of frames so the UI needle doesn't jump backward for no audio reason.
+            // Some display/LG mics report a periodic "low" buffer (-60…-80 dB) even while idle around -40 dB.
+            // If we see a sudden large drop compared to our current smoothed value, hold the previous value
+            // for a couple of frames so the UI needle doesn't jump backward for no audio reason.
+            // Extra guard: some LG / display mics report an overly hot idle around -30 dB.
+            // If we are NOT currently talking, hard-cap the raw level to something more reasonable
+            // so the meter doesn't look "hot" at idle.
+        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
+            let maxIdleDisplayDB: Float = -42
+            if l > maxIdleDisplayDB { l = maxIdleDisplayDB; gatedThisFrame = true }
+            if r > maxIdleDisplayDB { r = maxIdleDisplayDB; gatedThisFrame = true }
+        }
+        
+        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
+            let dropL = smoothedLeft - l
+            let dropR = smoothedRight - r
+            let largeDropThreshold: Float = 10.0
+                // The problematic LG frame sometimes lands a bit lower than -70, so widen the idle window.
+            let landedInIdleL = (l <= -33 && l >= -80)
+            let landedInIdleR = (r <= -33 && r >= -80)
+            var held = false
+            if dropL > largeDropThreshold && landedInIdleL && displayPulseHoldFrames < displayPulseHoldMax {
+                l = smoothedLeft
+                held = true
+            }
+            if dropR > largeDropThreshold && landedInIdleR && displayPulseHoldFrames < displayPulseHoldMax {
+                r = smoothedRight
+                held = true
+            }
+            if held {
+                displayPulseHoldFrames += 1
+            } else {
+                displayPulseHoldFrames = 0
+            }
+        }
+        
+            // LG / display mics often idle around -40 dB with no real audio.
+            // If the incoming level sits in that band and isn’t actually rising,
+            // clamp it to silence so the UI doesn’t look “hot” at idle.
+        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
+            let idleMin: Float = -60
+            let idleMax: Float = -33
+            let isInIdleBandL = (l >= idleMin && l <= idleMax)
+            let isInIdleBandR = (r >= idleMin && r <= idleMax)
+                // only treat the display’s idle shelf as "fake" if we were already truly quiet
+            let wasQuietL = smoothedLeft < -65
+            let wasQuietR = smoothedRight < -65
+            if isInIdleBandL && wasQuietL {
+                l = -120
+                gatedThisFrame = true
+            }
+            if isInIdleBandR && wasQuietR {
+                r = -120
+                gatedThisFrame = true
+            }
+        }
+        
+            // For LG UltraFine mics we want to go through the same display/ultrafine path
+            // instead of publishing raw levels and returning early. We only do a tiny
+            // stabilization for the first few frames after an engine start.
+        if isLGUltraFine && framesSinceEngineStart < 3 {
+                // lightly smooth just the first frames to avoid the backward jump
+            smoothedLeft = smoothing * l + (1 - smoothing) * smoothedLeft
+            smoothedRight = smoothing * r + (1 - smoothing) * smoothedRight
+            currentLeftLevel = smoothedLeft
+            currentRightLevel = smoothedRight
+            leftLevelSubject.send(smoothedLeft)
+            rightLevelSubject.send(smoothedRight)
+            let stats = AudioStats(left: smoothedLeft,
+                                   right: smoothedRight,
+                                   inputName: selectedDevice.name,
+                                   inputID: Int(selectedDevice.id))
+            statsSubject.send(stats)
+            lastFrameWasGated = gatedThisFrame
+            framesSinceEngineStart += 1
+            return
+        }
         
             // Devices like displays, iPhones, and Lumina cameras often sit at a fixed dB.
             // If we run adaptive floor on them, we “learn” that idle and clamp to silence.
-        let lowerName = selectedDevice.name.lowercased()
         let isLuminaLike = lowerName.contains("lumina") || lowerName.contains("camera")
         let isContinuityIPhone = lowerName.contains("iphone")
-        let skipAdaptiveNoiseFloor =
-        lowerName.contains("display") ||
-        lowerName.contains("ultrafine") ||
+        var skipAdaptiveNoiseFloor =
         lowerName.contains("iphone") ||
-        lowerName.contains("lumina") ||
-        lowerName.contains("camera") ||
         lowerName.contains("ak4571") ||
         lowerName.contains("microphone")
+            // LG / display mics sit on a fixed noisy floor; don’t let adaptive learning immediately clamp them.
+        if isDisplayOrUltrafine {
+            skipAdaptiveNoiseFloor = true
+        }
         
         let now = Date()
         let canLearnNow = (noiseFloorLearnNotBefore == nil) || (now >= noiseFloorLearnNotBefore!)
@@ -737,28 +959,161 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             }
         }
         
-            // Lumina / camera-like devices sometimes sit at a fixed mid band ("hot but not responsive").
-            // If we see a level in that band that barely moves, treat it as idle and clamp to silence so UI can recover.
-        if isLuminaLike || isContinuityIPhone {
-            let stuckBandMin: Float = -60
-            let stuckBandMax: Float = -40
-            if l > stuckBandMin && l < stuckBandMax && abs(l - smoothedLeft) < 1.5 {
-                l = -120
-            }
-            if r > stuckBandMin && r < stuckBandMax && abs(r - smoothedRight) < 1.5 {
-                r = -120
+            // Update display/Ultrafine cooldown each frame
+        if displayActivityCooldown > 0 {
+            displayActivityCooldown -= 1
+        }
+        
+            // Special-case display / UltraFine mics: only clamp the learned idle band when we're NOT already seeing
+            // real upward motion or clearly-above-idle audio. This prevents the needle from jumping backward when the
+            // device reports a steady idle but the user actually starts talking.
+        if isDisplayOrUltrafine,
+           learnedNoiseFloorSamples >= noiseFloorLearnWindow,
+           displayActivityCooldown == 0 {
+            if displayTalkingFrames == 0 {
+                let band: Float = 3.5  // dB around the learned idle
+                let isRisingL = originalL > smoothedLeft
+                let isRisingR = originalR > smoothedRight
+                let isClearlyAboveIdleL = originalL > learnedNoiseFloor + band
+                let isClearlyAboveIdleR = originalR > learnedNoiseFloor + band
+                
+                if l > learnedNoiseFloor - band && l < learnedNoiseFloor + band && !isRisingL && !isClearlyAboveIdleL {
+                    l = -120
+                    gatedThisFrame = true
+                }
+                if r > learnedNoiseFloor - band && r < learnedNoiseFloor + band && !isRisingR && !isClearlyAboveIdleR {
+                    r = -120
+                    gatedThisFrame = true
+                }
             }
         }
         
+            // Stronger, signal-aware gate for display/Ultrafine mics
+        let inDisplayCooldown = displayActivityCooldown > 0
+        if lowerName.contains("display") || lowerName.contains("ultrafine") {
+            if displayTalkingFrames > 0 {
+                    // while speech is active, only block obvious single-frame dips
+                let spikeDropL = smoothedLeft - l
+                let spikeDropR = smoothedRight - r
+                if spikeDropL > 6 { l = smoothedLeft }
+                if spikeDropR > 6 { r = smoothedRight }
+            }
+            let isStrongL = l > -30
+            let isStrongR = r > -30
+            let isTransientL = abs(l - smoothedLeft) > 6
+            let isTransientR = abs(r - smoothedRight) > 6
+                // If we have obviously loud speech, don't let later gating push it back down.
+            let clearlyLoud = isStrongL || isStrongR
+                // Detect speech that is modestly above the learned idle floor
+            let isAboveIdleL = originalL > learnedNoiseFloor + 4
+            let isAboveIdleR = originalR > learnedNoiseFloor + 4
+            
+                // 1) gate out the flat idle band
+                // allow forward motion (rising level) to break out of the idle clamp so the needle doesn't jump backward
+            let isRisingL = originalL > smoothedLeft
+            let isRisingR = originalR > smoothedRight
+            
+                // Arm cooldown immediately if we see real activity
+            if isStrongL || isStrongR || isTransientL || isTransientR || isRisingL || isRisingR {
+                displayActivityCooldown = max(displayActivityCooldown, 12)
+            }
+            
+            if !inDisplayCooldown && !isLGUltraFine {
+                if displayTalkingFrames == 0 {
+                    if !clearlyLoud {
+                        if !isStrongL && !isTransientL && !isRisingL && !isAboveIdleL {
+                            l = -120
+                            gatedThisFrame = true
+                        }
+                        if !isStrongR && !isTransientR && !isRisingR && !isAboveIdleR {
+                            r = -120
+                            gatedThisFrame = true
+                        }
+                    }
+                }
+            }
+            
+                // 2) even when we pass through, cap how fast the needle can move on these mics
+                //    to stop the wild bounce caused by HAL/device reporting jittery RMS values.
+            let maxStepPerFrame: Float = 8.0 // dB
+            if l > -120 {
+                let deltaL = l - smoothedLeft
+                if abs(deltaL) > maxStepPerFrame {
+                    l = smoothedLeft + (deltaL > 0 ? maxStepPerFrame : -maxStepPerFrame)
+                }
+            }
+            if r > -120 {
+                let deltaR = r - smoothedRight
+                if abs(deltaR) > maxStepPerFrame {
+                    r = smoothedRight + (deltaR > 0 ? maxStepPerFrame : -maxStepPerFrame)
+                }
+            }
+        }
+        
+            // Lumina / camera-like devices sometimes sit at a fixed mid band ("hot but not responsive").
+            // If we see a level in that band that barely moves, treat it as idle and clamp to silence so UI can recover.
+        if isLuminaLike {
+                // Lumina raw feed tends to hover between -65 and -48 even when "quiet".
+                // Treat that whole mid band as idle unless it's clearly above -40 (i.e. real signal).
+            if l > -70 && l < -40 {
+                l = -120
+            }
+            if r > -70 && r < -40 {
+                r = -120
+            }
+        } else if isContinuityIPhone {
+            let stuckBandMin: Float = -60
+            let stuckBandMax: Float = -40
+            let smallDelta: Float = 1.0
+            if l > stuckBandMin && l < stuckBandMax && abs(l - smoothedLeft) < smallDelta {
+                l = max(l, -90)
+            }
+            if r > stuckBandMin && r < stuckBandMax && abs(r - smoothedRight) < smallDelta {
+                r = max(r, -90)
+            }
+        }
+            // (removed hard clamp for display/UltraFine mics; now handled by adaptive noise floor logic)
+        
             // existing smoothing logic stays the same
             // device-aware smoothing: some devices (AK4571, Lumina/camera) look "stuck" with heavy smoothing
+            // device-aware smoothing: some devices (AK4571, Lumina/camera) need special handling
         let name = lowerName
-        if name.contains("ak4571") || name.contains("lumina") || name.contains("camera") || name.contains("iphone") || name.contains("microphone") {
-                // pass through current reading so UI shows immediate change
+        let isLuminaOrCamera = name.contains("lumina") || name.contains("camera")
+        
+        if isLuminaOrCamera {
+                // asymmetric smoothing: fast up, slow down
+            let riseSmoothing: Float = 0.35
+            let fallSmoothing: Float = 0.12
+                // left
+            if l > smoothedLeft {
+                smoothedLeft = riseSmoothing * l + (1 - riseSmoothing) * smoothedLeft
+            } else {
+                smoothedLeft = fallSmoothing * l + (1 - fallSmoothing) * smoothedLeft
+            }
+                // right
+            if r > smoothedRight {
+                smoothedRight = riseSmoothing * r + (1 - riseSmoothing) * smoothedRight
+            } else {
+                smoothedRight = fallSmoothing * r + (1 - fallSmoothing) * smoothedRight
+            }
+        } else if name.contains("ak4571") || name.contains("iphone") || name.contains("microphone") {
             smoothedLeft = l
             smoothedRight = r
+        } else if name.contains("display") || name.contains("ultrafine") {
+                // display / LG mics: fast rise, much faster fall so the meter doesn't stick
+            let rise: Float = 0.45
+            let fall: Float = 0.70   // was 0.40 — bigger fall makes the needle relax quicker
+            if l > smoothedLeft {
+                smoothedLeft = rise * l + (1 - rise) * smoothedLeft
+            } else {
+                smoothedLeft = fall * l + (1 - fall) * smoothedLeft
+            }
+            if r > smoothedRight {
+                smoothedRight = rise * r + (1 - rise) * smoothedRight
+            } else {
+                smoothedRight = fall * r + (1 - fall) * smoothedRight
+            }
         } else {
-                // default smoothing
             smoothedLeft  = smoothing * l  + (1 - smoothing) * smoothedLeft
             smoothedRight = smoothing * r  + (1 - smoothing) * smoothedRight
         }
@@ -773,6 +1128,19 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                                inputName: selectedDevice.name,
                                inputID: Int(selectedDevice.id))
         statsSubject.send(stats)
+        lastFrameWasGated = gatedThisFrame
+        isGatedSubject.send(gatedThisFrame)
+        
+            // Arm displayActivityCooldown only on real motion or moderately loud audio for display/UltraFine mics
+        if lowerName.contains("display") || lowerName.contains("ultrafine") {
+            let burstL = l > smoothedLeft + 2.5
+            let burstR = r > smoothedRight + 2.5
+            let loudL = l > -45
+            let loudR = r > -45
+            if burstL || burstR || loudL || loudR {
+                displayActivityCooldown = max(displayActivityCooldown, 6)
+            }
+        }
         
             // Device-aware silence watchdog: iPhone/Continuity tends to come up silent, so retry sooner.
             // Lumina/camera-like devices can show a constant floor, so don't hammer the tap for them.
@@ -791,6 +1159,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             tapRetryCount = 0
             pendingTapRetry?.cancel(); pendingTapRetry = nil
         }
+        framesSinceEngineStart += 1
     }
     
     

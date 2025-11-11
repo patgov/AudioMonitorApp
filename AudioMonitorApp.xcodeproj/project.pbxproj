@@ -27,6 +27,7 @@
 		3DA40EC32DF09B1700BE1354 /* AudioMonitorApp.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = AudioMonitorApp.xcodeproj; sourceTree = SOURCE_ROOT; };
 		E2AAF6B52E4BD11D0043D9E4 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		E2AAF6B62E4BD27A0043D9E4 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		E2BAE79E2EC1413000F9C3CE /* AudioMonitorMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioMonitorMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -59,10 +60,22 @@
 			path = AudioMonitorWidget;
 			sourceTree = "<group>";
 		};
+		E2BAE79F2EC1413000F9C3CE /* AudioMonitorMac */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AudioMonitorMac;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		3D69EBE32D9970800056F87C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E2BAE79B2EC1413000F9C3CE /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -91,6 +104,7 @@
 				3D69EBE82D9970800056F87C /* AudioMonitorApp */,
 				3D9B79DC2DF0885D00F528F3 /* AudioMonitorWidgetExtension */,
 				3DDCBCFE2DF0A3DD00B433C1 /* AudioMonitorWidget */,
+				E2BAE79F2EC1413000F9C3CE /* AudioMonitorMac */,
 				3D62A1D22DEDFB55002FFCC9 /* Frameworks */,
 				3D69EBE72D9970800056F87C /* Products */,
 			);
@@ -100,6 +114,7 @@
 			isa = PBXGroup;
 			children = (
 				3D69EBE62D9970800056F87C /* AudioMonitorApp.app */,
+				E2BAE79E2EC1413000F9C3CE /* AudioMonitorMac.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -135,6 +150,28 @@
 			productReference = 3D69EBE62D9970800056F87C /* AudioMonitorApp.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E2BAE79D2EC1413000F9C3CE /* AudioMonitorMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E2BAE7A82EC1413000F9C3CE /* Build configuration list for PBXNativeTarget "AudioMonitorMac" */;
+			buildPhases = (
+				E2BAE79A2EC1413000F9C3CE /* Sources */,
+				E2BAE79B2EC1413000F9C3CE /* Frameworks */,
+				E2BAE79C2EC1413000F9C3CE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E2BAE79F2EC1413000F9C3CE /* AudioMonitorMac */,
+			);
+			name = AudioMonitorMac;
+			packageProductDependencies = (
+			);
+			productName = AudioMonitorMac;
+			productReference = E2BAE79E2EC1413000F9C3CE /* AudioMonitorMac.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -142,11 +179,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1630;
+				LastSwiftUpdateCheck = 2610;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					3D69EBE52D9970800056F87C = {
 						CreatedOnToolsVersion = 16.2;
+					};
+					E2BAE79D2EC1413000F9C3CE = {
+						CreatedOnToolsVersion = 26.1;
 					};
 				};
 			};
@@ -171,6 +211,7 @@
 			projectRoot = "";
 			targets = (
 				3D69EBE52D9970800056F87C /* AudioMonitorApp */,
+				E2BAE79D2EC1413000F9C3CE /* AudioMonitorMac */,
 			);
 		};
 /* End PBXProject section */
@@ -183,10 +224,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E2BAE79C2EC1413000F9C3CE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		3D69EBE22D9970800056F87C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E2BAE79A2EC1413000F9C3CE /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -327,7 +382,7 @@
 		3D69EBF62D9970810056F87C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = vu_meter;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -351,9 +406,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AudioMonitorApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor ";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AudioMonitor needs microphone access to display live input levels and diagnostics.";
+				INFOPLIST_KEY_UILaunchStoryboardName = Applcon;
 				LD_RUNPATH_SEARCH_PATH = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks\n";
 				LD_RUNPATH_SEARCH_PATHS = "\"$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks\"";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -370,20 +426,20 @@
 				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
-				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 6.0;
 				Swift_Concurrency_Checking = Minimal;
-				TARGETED_DEVICE_FAMILY = "";
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
 		3D69EBF72D9970810056F87C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = vu_meter;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -407,9 +463,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AudioMonitorApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Audio Monitor ";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AudioMonitor needs microphone access to display live input levels and diagnostics.";
+				INFOPLIST_KEY_UILaunchStoryboardName = Applcon;
 				LD_RUNPATH_SEARCH_PATH = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks\n";
 				LD_RUNPATH_SEARCH_PATHS = "\"$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks\"";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -426,13 +483,79 @@
 				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
-				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 6.0;
 				Swift_Concurrency_Checking = Minimal;
-				TARGETED_DEVICE_FAMILY = "";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E2BAE7A62EC1413000F9C3CE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorMac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E2BAE7A72EC1413000F9C3CE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SYJ72F7Z55;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = us.govango.AudioMonitorMac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
@@ -453,6 +576,15 @@
 			buildConfigurations = (
 				3D69EBF62D9970810056F87C /* Debug */,
 				3D69EBF72D9970810056F87C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E2BAE7A82EC1413000F9C3CE /* Build configuration list for PBXNativeTarget "AudioMonitorMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E2BAE7A62EC1413000F9C3CE /* Debug */,
+				E2BAE7A72EC1413000F9C3CE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

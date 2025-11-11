@@ -21,6 +21,8 @@ struct AudioMonitorView_Extensions: View {
     }
 }
 
+#if DEBUG
 #Preview(traits: .sizeThatFitsLayout) {
     AudioMonitorView_Extensions(viewModel: AudioMonitorViewModel.preview)
 }
+#endif

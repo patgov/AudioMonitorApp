@@ -1,5 +1,3 @@
-
-
 import SwiftUI
 
 struct DevicePickerView: View {
@@ -29,10 +27,11 @@ extension InputAudioDevice {
 }
 #endif
 
-
+#if DEBUG
 #Preview {
     DevicePickerView(
         selectedDevice: .constant(InputAudioDevice.preview),
         availableDevices: [InputAudioDevice.preview]
     )
 }
+#endif

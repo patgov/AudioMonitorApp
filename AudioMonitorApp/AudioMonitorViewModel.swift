@@ -170,12 +170,17 @@ final class AudioMonitorViewModel: ObservableObject {
 #if DEBUG
 extension AudioMonitorViewModel {
     static var preview: AudioMonitorViewModel {
+            // use lightweight preview-safe dependencies
         let dummyAudioManager = DummyAudioManager()
-        let dummyLogManager = PreviewSafeLogManager()
-        let vm = AudioMonitorViewModel(audioManager: dummyAudioManager, logManager: dummyLogManager)
-        vm._injectPreviewStats(AudioStats(left: -6.5, right: -5.2, inputName: "MockMic", inputID: 42))
+        let dummyLogManager  = PreviewSafeLogManager()
+        
+        let vm = AudioMonitorViewModel(
+            audioManager: dummyAudioManager,
+            logManager: dummyLogManager
+        )
+            // seed some example levels so the UI looks alive
+        vm.updateLevels(left: -10, right: -8)
         return vm
     }
 }
 #endif
-
