@@ -765,16 +765,41 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             return
         }
         
-            // Arm/disarm a short "talking" window for display/LG mics
+            // Arm/disarm a short "talking" window for display/LG mics.
+            // Behavior:
+            //  - Any frame above `speechOn` resets the talking window (we're clearly talking).
+            //  - As soon as we drop below `speechOn`, we start counting down every frame,
+            //    regardless of whether we're in the -40 dB idle shelf. That way, long
+            //    stretches of the LG's fake idle floor eventually clamp to silence instead
+            //    of looking "hot" forever after you stop talking.
         if isDisplayOrUltrafine {
-                // if the incoming buffer clearly rises above the current smoothed value, assume real speech
-            if originalL > smoothedLeft + 2.0 || originalR > smoothedRight + 2.0 {
-                displayTalkingFrames = 10   // shorter talking window so we can decay again
+            let maxLevel = max(originalL, originalR)
+            let speechOn: Float = -34
+            let talkingWindowFrames = 60  // ~1–1.2s at current tap cadence
+            
+            if maxLevel > speechOn {
+                    // Active speech detected: keep the window open for a bit longer
+                displayTalkingFrames = talkingWindowFrames
             } else if displayTalkingFrames > 0 {
+                    // Below the speech-on threshold: decay the talking window every frame
+                    // so that sustained idle shelves (around -37 to -40 dB) eventually
+                    // transition to true "silent" behavior and let the idle clamps engage.
                 displayTalkingFrames -= 1
             }
         }
-        
+            // If we're on a display/LG mic, not currently in a talking window, and both channels
+            // sit well below a "speech-ish" floor, treat this as hard idle and clamp to silence.
+            // This keeps the needle pinned down between utterances instead of bouncing on the
+            // panel's idle shelf, while still allowing real speech (which rises above this floor)
+            // to punch through.
+        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
+            let speechIdleFloor: Float = -34  // anything quieter than this is treated as non-speech idle
+            if originalL <= speechIdleFloor && originalR <= speechIdleFloor {
+                l = -120
+                r = -120
+                gatedThisFrame = true
+            }
+        }
             // For LG / display mics: if we're NOT in a talking window and the raw value
             // sits in the known “fake idle” band (-70 dB … -33 dB), just publish silence
             // and bail out. This prevents the meter from looking hot at idle while still
@@ -784,7 +809,9 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             let fakeIdleMax: Float = -33   // upper end of the noisy shelf we saw in logs
             let rawInFakeBandL = (originalL >= fakeIdleMin && originalL <= fakeIdleMax)
             let rawInFakeBandR = (originalR >= fakeIdleMin && originalR <= fakeIdleMax)
-            if rawInFakeBandL || rawInFakeBandR {
+                // Don’t immediately clamp the very first frames rising out of true silence.
+            let wasFullySilent = (smoothedLeft <= -90 && smoothedRight <= -90)
+            if (rawInFakeBandL || rawInFakeBandR) && !wasFullySilent {
                 gatedThisFrame = true
                 smoothedLeft = -120
                 smoothedRight = -120
@@ -1144,7 +1171,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         
             // Device-aware silence watchdog: iPhone/Continuity tends to come up silent, so retry sooner.
             // Lumina/camera-like devices can show a constant floor, so don't hammer the tap for them.
-        let watchSilence = !(isLuminaLike || isContinuityIPhone)
+        let watchSilence = !(isLuminaLike || isContinuityIPhone || isDisplayOrUltrafine)
         if l <= -119 && r <= -119 {
             if watchSilence {
                 silentCount += 1
