@@ -11,6 +11,32 @@ import Accelerate
 public final class AudioManager: ObservableObject, AudioManagerProtocol {
     private let logger = Logger(subsystem: "us.govango.AudioMonitorApp", category: "AudioManager")
     
+    struct DeviceCapabilities {
+        let name: String
+        let inputID: Int
+        let channelCount: Int
+        let sampleRate: Double
+        let isValidInput: Bool
+    }
+    
+    struct ActiveInputInfo {
+        let selectedName: String
+        let selectedID: Int
+        let reportedName: String
+        let reportedID: Int
+        
+        var isMatching: Bool {
+            selectedID == reportedID && !selectedName.isEmpty && !reportedName.isEmpty
+        }
+    }
+    
+        // Exposed device capability and active-input info streams
+    private let deviceCapabilitiesSubject = CurrentValueSubject<DeviceCapabilities?, Never>(nil)
+    var deviceCapabilitiesStream: AnyPublisher<DeviceCapabilities?, Never> { deviceCapabilitiesSubject.eraseToAnyPublisher() }
+    
+    private let activeInputSubject = CurrentValueSubject<ActiveInputInfo?, Never>(nil)
+    var activeInputStream: AnyPublisher<ActiveInputInfo?, Never> { activeInputSubject.eraseToAnyPublisher() }
+    
         // Backing storage for protocol Float getters
     private var currentLeftLevel: Float = -120
     private var currentRightLevel: Float = -120
@@ -82,13 +108,45 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     private let displayDropIgnoreThreshold: Float = 6.0
     
         // Frame counter since engine start (for device-specific stabilization)
+        // ... existing engine state properties ...
     private var framesSinceEngineStart: Int = 0
+    private var hasSeenNonSilentFrameForCurrentEngine = false
+    private var didAttemptBluetoothFallbackForCurrentEngine = false
+    
+    private var engineStartedAt: Date?
+    private let bluetoothSilenceFallbackSeconds: TimeInterval = 1.5
+    
+        // Tracks whether the user has explicitly chosen a device in-app
+    private var userPinnedSelection: Bool = false
     
         // Tracks if last frame was gated (for UI/diagnostics)
     private var lastFrameWasGated: Bool = false
     
         // Wait before learning noise floor after a route/device change
     private var noiseFloorLearnNotBefore: Date? = nil
+    
+        // Track sustained quiet for display/LG mics so we can clamp real silence
+    private var displayQuietFrames: Int = 0
+    private let displayQuietFramesForSilence: Int = 8   // ~120–180ms of quiet before hard-clamp
+    
+        // Signal health tracking (used to warn when we see essentially no usable audio)
+    private var framesObserved: Int = 0
+    private var maxLevelObserved: Float = -120.0
+        // Flat-level watchdog: detects when we see a low, nearly-constant level for a long time ("zombie" paths)
+    private var flatLevelFrameCount: Int = 0
+    private var flatLevelLastValue: Float = -120.0
+    private let flatLevelTolerance: Float = 0.4        // dB window within which we treat frames as "flat"
+    private let flatLevelFrameThreshold: Int = 90      // frames of flat, low-level audio before we retry the tap
+    let signalWarningSubject = CurrentValueSubject<String?, Never>(nil)
+    public var signalWarningStream: AnyPublisher<String?, Never> { signalWarningSubject.eraseToAnyPublisher() }
+    
+        // Dead-silence detector (for devices that return hard zero like some display mics)
+    private var deadSilenceFrameCount: Int = 0
+    private let deadSilenceFrameThreshold: Int = 60   // number of consecutive full-silence frames before auto-restart
+    private var lastSilenceRecoveryAt: Date? = nil
+    private let silenceRecoveryMinInterval: TimeInterval = 3.0  // seconds between auto-recovery attempts
+    
+    
     
     
 #if !os(macOS)
@@ -112,13 +170,19 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
 #endif
     private var meterConverter: AVAudioConverter? = nil
     private var meterFormat: AVAudioFormat? = nil
+        //#if os(macOS)
+        //#if os(macOS)
 #if os(macOS)
-        /// Do NOT force the macOS System Settings default input to our selection unless explicitly enabled.
+        /// Force the macOS System Settings default input to follow the current in-app selection.
     private var forceSystemDefaultToSelected = false
         /// Tracks whether we've registered a listener for default input changes.
     private var defaultListenerInstalled = false
         /// Prevent recursive/default-switch feedback loops
     private var isSwitchingDefaultInput = false
+    private var pendingSystemDefaultInput: InputAudioDevice? = nil
+    private var lastSystemInputChangeAt: Date? = nil
+    private let bluetoothAdoptionDelay: TimeInterval = 1.5
+    private let bluetoothAdoptionTimeout: TimeInterval = 5.0
         /// Current snapshot of available input devices (computed on demand)
     private var inputDevices: [InputAudioDevice] { enumerateInputDevices() }
         /// Engine restart backoff for transient HAL failures (-10877, server failed to start)
@@ -146,6 +210,61 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     
     
     
+    private func resetSignalHealth() {
+        framesObserved = 0
+        maxLevelObserved = -120.0
+        flatLevelFrameCount = 0
+        flatLevelLastValue = -120.0
+        signalWarningSubject.send(nil)
+    }
+    
+        /// Auto-recovery path when we see sustained full-scale digital silence from the current input.
+        /// This is primarily to handle display / LG mics that occasionally fall into a "zombie" state
+        /// where CoreAudio returns zeros with a valid format and device ID.
+    private func attemptSilenceRecoveryIfNeeded() {
+        let now = Date()
+        if let last = lastSilenceRecoveryAt, now.timeIntervalSince(last) < silenceRecoveryMinInterval {
+            return
+        }
+        lastSilenceRecoveryAt = now
+        
+        logger.warning("🩺 Sustained digital silence detected from \(self.selectedDevice.name) — restarting engine and refreshing devices (auto-recover)")
+        
+            // Reset health counters
+        framesObserved = 0
+        maxLevelObserved = -120.0
+        flatLevelFrameCount = 0
+        flatLevelLastValue = -120.0
+        silentCount = 0
+        deadSilenceFrameCount = 0
+        hasSeenNonSilentFrameForCurrentEngine = false
+        didAttemptBluetoothFallbackForCurrentEngine = false
+        
+            // Cancel any pending tap retries
+        pendingTapRetry?.cancel()
+        pendingTapRetry = nil
+        tapRetryCount = 0
+        
+            // Tear down current tap and engine
+        if engine.isRunning {
+            engine.stop()
+        }
+        if tapInstalled {
+            engine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
+        
+#if os(macOS)
+            // Refresh device list in case the underlying HAL device changed or disappeared
+        refreshInputDevices()
+#endif
+        
+            // Restart the engine on the (possibly updated) selected device
+        if !isStarting {
+            startEngine()
+        }
+    }
+    
         // MARK: - Selected Device
     public private(set) var selectedDevice: InputAudioDevice = .none
     
@@ -154,6 +273,9 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         DispatchQueue.main.async {
                 // Ignore if selecting the same device
             if device.id == self.selectedDevice.id { return }
+            
+                // Mark that the user has explicitly chosen a device in-app
+            self.userPinnedSelection = true
             
                 // Update selection & publish immediately so UI reflects the change
             self.selectedDevice = device
@@ -178,6 +300,11 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             self.learnedNoiseFloorSamples = 0
             self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
             
+                // Reset signal-health tracking for the new device
+            self.resetSignalHealth()
+                // New engine instance: we haven't seen any real samples yet.
+            self.hasSeenNonSilentFrameForCurrentEngine = false
+            self.didAttemptBluetoothFallbackForCurrentEngine = false
             
                 // Debounce engine restart to avoid thrashing when user scrolls the picker
             self.pendingRestartWork?.cancel()
@@ -323,12 +450,22 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             logger.debug("⏳ startEngine ignored (already starting)")
             return
         }
+        
+#if os(macOS)
+            // If HAL has recently thrown -10877 (or similar) during device queries,
+            // give it a short window to recover before rebuilding the engine graph.
+        if let backoff = halBackoffUntil, backoff > Date() {
+            logger.warning("⏸️ HAL backoff active until \(backoff) — skipping startEngine()")
+            return
+        }
+#endif
+        
         isStarting = true
         defer { isStarting = false }
         
             // Tear down any previous tap/graph safely
         if engine.isRunning { engine.stop() }
-            //#if os(macOS)
+        
 #if os(macOS)
         if forceSystemDefaultToSelected,
            let def = systemDefaultInputDevice(),
@@ -375,6 +512,25 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             let fmt = input.inputFormat(forBus: 0)
             logger.info("🎧 Engine started (\(fmt.channelCount)ch @ \(fmt.sampleRate) Hz)")
             
+                // Publish current device capabilities based on the running engine input
+            let caps = DeviceCapabilities(
+                name: self.selectedDevice.name,
+                inputID: Int(self.selectedDevice.id),
+                channelCount: Int(fmt.channelCount),
+                sampleRate: fmt.sampleRate,
+                isValidInput: fmt.channelCount > 0
+            )
+            self.deviceCapabilitiesSubject.send(caps)
+            
+                // Publish basic active-input info (reported device is the current selection for now)
+            let active = ActiveInputInfo(
+                selectedName: self.selectedDevice.name,
+                selectedID: Int(self.selectedDevice.id),
+                reportedName: self.selectedDevice.name,
+                reportedID: Int(self.selectedDevice.id)
+            )
+            self.activeInputSubject.send(active)
+            
                 // reset meter only after we actually have a running engine on the new device
             self.smoothedLeft = -80
             self.smoothedRight = -80
@@ -383,8 +539,25 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             self.leftLevelSubject.send(-80)
             self.rightLevelSubject.send(-80)
             self.framesSinceEngineStart = 0
+            
+                // reset signal-health tracking for the newly started engine
+            self.resetSignalHealth()
+                // New engine instance: no real samples or Bluetooth fallback yet
+            self.hasSeenNonSilentFrameForCurrentEngine = false
+            self.didAttemptBluetoothFallbackForCurrentEngine = false
+            self.engineStartedAt = Date()
+            
+            
         } catch {
             logger.error("❌ Engine failed to start: \(error.localizedDescription)")
+            
+#if os(macOS)
+                // Treat any start failure as a HAL stress signal and back off briefly,
+                // so we don't keep rebuilding the graph into a failing HAL.
+            halBackoffUntil = Date().addingTimeInterval(1.5)
+            logger.warning("⏸️ Entering HAL backoff for 1.5s due to engine start failure")
+#endif
+            
             scheduleEngineRestart(reason: "engine start failed: \(error.localizedDescription)")
             return
         }
@@ -406,13 +579,35 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
     
 #if os(macOS)
     private func scheduleEngineRestart(reason: String, delay: TimeInterval? = nil) {
+            // Suppress restarts while we're inside the system-driven input grace window
+        if let grace = inputAutoSelectGraceUntil, grace > Date() {
+            logger.warning("⏳ scheduleEngineRestart suppressed during system input grace window – \(reason)")
+            return
+        }
+            // Suppress restarts while a deferred Bluetooth default is pending adoption
+        if pendingSystemDefaultInput != nil {
+            logger.warning("⏳ scheduleEngineRestart suppressed while pending Bluetooth default exists – \(reason)")
+            return
+        }
+        
         guard engineRestartRetryCount < engineRestartRetryMax else {
-            logger.error("🛑 Engine restart retry limit reached — giving up (")
+            logger.error("🛑 Engine restart retry limit reached — giving up")
             return
         }
         engineRestartRetryCount += 1
-        let d = delay ?? engineRestartRetryDelay
-        DispatchQueue.main.asyncAfter(deadline: .now() + d) { [weak self] in
+        
+        let baseDelay = delay ?? engineRestartRetryDelay
+        var effectiveDelay = baseDelay
+        
+            // If HAL is in a backoff window, push the restart to just after that window
+        if let backoff = halBackoffUntil {
+            let remaining = backoff.timeIntervalSince(Date())
+            if remaining > 0 {
+                effectiveDelay = max(baseDelay, remaining + 0.1)
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + effectiveDelay) { [weak self] in
             guard let self = self else { return }
             self.logger.warning("🔁 Restarting audio engine (attempt \(self.engineRestartRetryCount)) – \(reason)")
             self.startEngine()
@@ -504,7 +699,13 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             lowerName.contains("camera") ||
             lowerName.contains("ak4571") ||
             lowerName.contains("iphone") ||
-            lowerName.contains("microphone")
+            lowerName.contains("microphone") ||
+            lowerName.contains("airpods") ||
+            lowerName.contains("beats") ||
+            lowerName.contains("usb") ||
+            lowerName.contains("interface") ||
+            lowerName.contains("display") ||
+            lowerName.contains("ultrafine")
             if !skipVolumeMute, let vol = self.currentSelectedInputDeviceVolumeScalar() {
                 if vol <= 0.01 {
                         // Device explicitly reports an input volume of ~0 → mute
@@ -596,7 +797,13 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             let skipGate =
             lowerName.contains("ak4571") ||
             lowerName.contains("iphone") ||
-            lowerName.contains("microphone")
+            lowerName.contains("microphone") ||
+            lowerName.contains("airpods") ||
+            lowerName.contains("beats") ||
+            lowerName.contains("usb") ||
+            lowerName.contains("interface") ||
+            lowerName.contains("display") ||
+            lowerName.contains("ultrafine")
             let dBL: Float
             let dBR: Float
             if skipGate {
@@ -745,130 +952,82 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         let lowerName = selectedDevice.name.lowercased()
         let isDisplayOrUltrafine = lowerName.contains("display") || lowerName.contains("ultrafine")
         let isLGUltraFine = lowerName.contains("lg ultrafine") || lowerName.contains("lg ultrafine display")
+            /// For now, treat display / LG mics like “real” mics (Beats, AK4571, etc.) for metering.
+        let treatDisplayLikeRealMic = isDisplayOrUltrafine
         var gatedThisFrame = false
+        let isAirPods = lowerName.contains("airpods")
+        let isBeats = lowerName.contains("beats")
+        let isBluetoothHeadset = isAirPods || isBeats
+        let isContinuityIPhone = lowerName.contains("iphone")
         
-            // Force real silence through for display/LG devices
-        if isDisplayOrUltrafine && originalL <= -90 && originalR <= -90 {
-            smoothedLeft = -120
-            smoothedRight = -120
-            currentLeftLevel = -120
-            currentRightLevel = -120
-            leftLevelSubject.send(-120)
-            rightLevelSubject.send(-120)
-            let stats = AudioStats(left: -120,
-                                   right: -120,
-                                   inputName: selectedDevice.name,
-                                   inputID: Int(selectedDevice.id))
-            statsSubject.send(stats)
-            lastFrameWasGated = true
-            isGatedSubject.send(true)
-            return
+            // Track whether we've ever seen a non-silent frame on this engine instance.
+            // Use the original (pre-gated) levels so display/Ultrafine clamping doesn't hide real samples.
+        let rawMax = max(originalL, originalR)
+        let isFrameSilent = (rawMax <= -119)
+        if !isFrameSilent {
+            hasSeenNonSilentFrameForCurrentEngine = true
         }
         
-            // Arm/disarm a short "talking" window for display/LG mics.
-            // Behavior:
-            //  - Any frame above `speechOn` resets the talking window (we're clearly talking).
-            //  - As soon as we drop below `speechOn`, we start counting down every frame,
-            //    regardless of whether we're in the -40 dB idle shelf. That way, long
-            //    stretches of the LG's fake idle floor eventually clamp to silence instead
-            //    of looking "hot" forever after you stop talking.
-        if isDisplayOrUltrafine {
+            // For Bluetooth headsets, while the new engine instance is still fully silent,
+            // hold the UI at hard silence instead of reusing the last device's level.
+            // This avoids the “levels lost” freeze while macOS brings the SCO/HFP path online.
+        let bluetoothPreRollGateDB: Float = -80.0
+        let isBluetoothPreRoll = isBluetoothHeadset &&
+        !hasSeenNonSilentFrameForCurrentEngine &&
+        rawMax < bluetoothPreRollGateDB
+        if isBluetoothPreRoll {
+            l = -120
+            r = -120
+        }
+        
+            // --- Display / LG UltraFine: speech-armed hard gate (disabled when treating as real mic) --- //
+        if isDisplayOrUltrafine && !treatDisplayLikeRealMic {
             let maxLevel = max(originalL, originalR)
-            let speechOn: Float = -34
-            let talkingWindowFrames = 60  // ~1–1.2s at current tap cadence
+            let smoothedMax = max(smoothedLeft, smoothedRight)
             
-            if maxLevel > speechOn {
-                    // Active speech detected: keep the window open for a bit longer
-                displayTalkingFrames = talkingWindowFrames
-            } else if displayTalkingFrames > 0 {
-                    // Below the speech-on threshold: decay the talking window every frame
-                    // so that sustained idle shelves (around -37 to -40 dB) eventually
-                    // transition to true "silent" behavior and let the idle clamps engage.
+                // Decay the talking window if it's currently active
+            if displayTalkingFrames > 0 {
                 displayTalkingFrames -= 1
             }
-        }
-            // If we're on a display/LG mic, not currently in a talking window, and both channels
-            // sit well below a "speech-ish" floor, treat this as hard idle and clamp to silence.
-            // This keeps the needle pinned down between utterances instead of bouncing on the
-            // panel's idle shelf, while still allowing real speech (which rises above this floor)
-            // to punch through.
-        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
-            let speechIdleFloor: Float = -34  // anything quieter than this is treated as non-speech idle
-            if originalL <= speechIdleFloor && originalR <= speechIdleFloor {
-                l = -120
-                r = -120
-                gatedThisFrame = true
+            
+                // Only arm "talking" when we see a clearly speech-like transient:
+                //  - level is loud-ish (>-30 dBFS), and
+                //  - we see a sudden upward jump compared to the current smoothed value.
+            let armThreshold: Float = -30.0
+            let armDelta: Float = 8.0
+            let delta = maxLevel - smoothedMax
+            
+            if delta > armDelta && maxLevel > armThreshold {
+                    // Real speech detected: keep the gate open for a short window
+                displayTalkingFrames = 40   // ~600–800 ms depending on tap cadence
             }
-        }
-            // For LG / display mics: if we're NOT in a talking window and the raw value
-            // sits in the known “fake idle” band (-70 dB … -33 dB), just publish silence
-            // and bail out. This prevents the meter from looking hot at idle while still
-            // allowing real speech (which will push levels above this band) to get through.
-        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
-            let fakeIdleMin: Float = -70   // lower end of the noisy shelf we saw in logs
-            let fakeIdleMax: Float = -33   // upper end of the noisy shelf we saw in logs
-            let rawInFakeBandL = (originalL >= fakeIdleMin && originalL <= fakeIdleMax)
-            let rawInFakeBandR = (originalR >= fakeIdleMin && originalR <= fakeIdleMax)
-                // Don’t immediately clamp the very first frames rising out of true silence.
-            let wasFullySilent = (smoothedLeft <= -90 && smoothedRight <= -90)
-            if (rawInFakeBandL || rawInFakeBandR) && !wasFullySilent {
-                gatedThisFrame = true
-                smoothedLeft = -120
-                smoothedRight = -120
-                currentLeftLevel = smoothedLeft
-                currentRightLevel = smoothedRight
-                leftLevelSubject.send(smoothedLeft)
-                rightLevelSubject.send(smoothedRight)
-                let stats = AudioStats(left: smoothedLeft,
-                                       right: smoothedRight,
-                                       inputName: selectedDevice.name,
-                                       inputID: Int(selectedDevice.id))
-                statsSubject.send(stats)
-                lastFrameWasGated = true
-                isGatedSubject.send(true)
-                return
-            }
-        }
-        
-            // Hard idle clamp for LG / display mics: if we're not in a talking window,
-            // anything above about -60 dB is just the panel's noisy floor. Treat it as silence
-            // so the UI doesn't look "hot" at idle.
-        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
-            let displayIdleCeiling: Float = -60
-            if l > displayIdleCeiling { l = -120; gatedThisFrame = true }
-            if r > displayIdleCeiling { r = -120; gatedThisFrame = true }
+                // (Removed forced silence when not in a talking window)
         }
         
             // ... inside processLevels(...) right after you compute isDisplayOrUltrafine etc.
         
-        if isDisplayOrUltrafine {
-            let rawDropL = smoothedLeft - originalL
-            let rawDropR = smoothedRight - originalR
-            let bigDrop: Float = 10.0   // slightly bigger than noise, smaller than your 12 dB one
-            
-                // Case 1: we were already talking → always ignore the spike
-            if displayTalkingFrames > 0 {
-                if rawDropL > bigDrop && originalL > -110 {
-                    l = smoothedLeft
-                    displayTalkingFrames = max(displayTalkingFrames, 10)
-                }
-                if rawDropR > bigDrop && originalR > -110 {
-                    r = smoothedRight
-                    displayTalkingFrames = max(displayTalkingFrames, 10)
-                }
-            } else {
-                    // Case 2: we were NOT talking yet, but this looks exactly like the LG “one bad frame”
-                    // (we were around -35..-45 and suddenly got a much lower frame)
-                let wasInDisplayIdle = (smoothedLeft > -50 && smoothedLeft < -30) || (smoothedRight > -50 && smoothedRight < -30)
-                if wasInDisplayIdle {
-                    if rawDropL > bigDrop && originalL > -110 {
-                        l = smoothedLeft
-                    }
-                    if rawDropR > bigDrop && originalR > -110 {
-                        r = smoothedRight
-                    }
-                }
-            }
+            // --- Display / LG UltraFine: speech-armed hard gate (disabled when treating as real mic) --- //
+            // if isDisplayOrUltrafine && !treatDisplayLikeRealMic {
+            //            let rawDropL = smoothedLeft - originalL
+            //            let rawDropR = smoothedRight - originalR
+            //            let bigDrop: Float = 10.0
+            //            let isVeryQuietL = originalL < -55    // treat deep drops as real silence, not glitches
+            //            let isVeryQuietR = originalR < -55
+            //
+            //            if displayTalkingFrames > 0 {
+            //                if rawDropL > bigDrop && originalL > -110 && !isVeryQuietL {
+            //                    l = smoothedLeft
+            //                    displayTalkingFrames = max(displayTalkingFrames, 10)
+            //                }
+            //                if rawDropR > bigDrop && originalR > -110 && !isVeryQuietR {
+            //                    r = smoothedRight
+            //                    displayTalkingFrames = max(displayTalkingFrames, 10)
+            //                }
+        
+        if isDisplayOrUltrafine && !treatDisplayLikeRealMic && displayTalkingFrames == 0 {
+            let maxIdleDisplayDB: Float = -42
+            if l > maxIdleDisplayDB { l = maxIdleDisplayDB; gatedThisFrame = true }
+            if r > maxIdleDisplayDB { r = maxIdleDisplayDB; gatedThisFrame = true }
         }
         
             // Some display/LG mics report a periodic "low" buffer (-60…-80 dB) even while idle around -40 dB.
@@ -880,13 +1039,13 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             // Extra guard: some LG / display mics report an overly hot idle around -30 dB.
             // If we are NOT currently talking, hard-cap the raw level to something more reasonable
             // so the meter doesn't look "hot" at idle.
-        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
+        if isDisplayOrUltrafine && !treatDisplayLikeRealMic && displayTalkingFrames == 0 {
             let maxIdleDisplayDB: Float = -42
             if l > maxIdleDisplayDB { l = maxIdleDisplayDB; gatedThisFrame = true }
             if r > maxIdleDisplayDB { r = maxIdleDisplayDB; gatedThisFrame = true }
         }
         
-        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
+        if isDisplayOrUltrafine && !treatDisplayLikeRealMic && displayTalkingFrames == 0 {
             let dropL = smoothedLeft - l
             let dropR = smoothedRight - r
             let largeDropThreshold: Float = 10.0
@@ -912,7 +1071,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             // LG / display mics often idle around -40 dB with no real audio.
             // If the incoming level sits in that band and isn’t actually rising,
             // clamp it to silence so the UI doesn’t look “hot” at idle.
-        if isDisplayOrUltrafine && displayTalkingFrames == 0 {
+        if isDisplayOrUltrafine && !treatDisplayLikeRealMic && displayTalkingFrames == 0 {
             let idleMin: Float = -60
             let idleMax: Float = -33
             let isInIdleBandL = (l >= idleMin && l <= idleMax)
@@ -933,7 +1092,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             // For LG UltraFine mics we want to go through the same display/ultrafine path
             // instead of publishing raw levels and returning early. We only do a tiny
             // stabilization for the first few frames after an engine start.
-        if isLGUltraFine && framesSinceEngineStart < 3 {
+        if isLGUltraFine && !treatDisplayLikeRealMic && framesSinceEngineStart < 3 {
                 // lightly smooth just the first frames to avoid the backward jump
             smoothedLeft = smoothing * l + (1 - smoothing) * smoothedLeft
             smoothedRight = smoothing * r + (1 - smoothing) * smoothedRight
@@ -954,15 +1113,18 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             // Devices like displays, iPhones, and Lumina cameras often sit at a fixed dB.
             // If we run adaptive floor on them, we “learn” that idle and clamp to silence.
         let isLuminaLike = lowerName.contains("lumina") || lowerName.contains("camera")
-        let isContinuityIPhone = lowerName.contains("iphone")
-        var skipAdaptiveNoiseFloor =
-        lowerName.contains("iphone") ||
-        lowerName.contains("ak4571") ||
-        lowerName.contains("microphone")
-            // LG / display mics sit on a fixed noisy floor; don’t let adaptive learning immediately clamp them.
-        if isDisplayOrUltrafine {
-            skipAdaptiveNoiseFloor = true
-        }
+            //    let isContinuityIPhone = lowerName.contains("iphone")
+            // Only skip adaptive noise-floor learning for devices that are known to have odd, fixed floors
+            // or are handled by dedicated logic elsewhere (display mics, Lumina/camera, Continuity iPhone,
+            // Beats/AirPods, and common USB/interface-style inputs).
+        let isUSBOrInterface = lowerName.contains("usb") || lowerName.contains("interface")
+        let skipAdaptiveNoiseFloor =
+        isContinuityIPhone ||
+        isLuminaLike ||
+        isDisplayOrUltrafine ||
+        isAirPods ||
+        isBeats ||
+        isUSBOrInterface
         
         let now = Date()
         let canLearnNow = (noiseFloorLearnNotBefore == nil) || (now >= noiseFloorLearnNotBefore!)
@@ -994,7 +1156,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             // Special-case display / UltraFine mics: only clamp the learned idle band when we're NOT already seeing
             // real upward motion or clearly-above-idle audio. This prevents the needle from jumping backward when the
             // device reports a steady idle but the user actually starts talking.
-        if isDisplayOrUltrafine,
+        if isDisplayOrUltrafine && !treatDisplayLikeRealMic,
            learnedNoiseFloorSamples >= noiseFloorLearnWindow,
            displayActivityCooldown == 0 {
             if displayTalkingFrames == 0 {
@@ -1017,7 +1179,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         
             // Stronger, signal-aware gate for display/Ultrafine mics
         let inDisplayCooldown = displayActivityCooldown > 0
-        if lowerName.contains("display") || lowerName.contains("ultrafine") {
+        if (lowerName.contains("display") || lowerName.contains("ultrafine")) && !treatDisplayLikeRealMic {
             if displayTalkingFrames > 0 {
                     // while speech is active, only block obvious single-frame dips
                 let spikeDropL = smoothedLeft - l
@@ -1079,16 +1241,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         
             // Lumina / camera-like devices sometimes sit at a fixed mid band ("hot but not responsive").
             // If we see a level in that band that barely moves, treat it as idle and clamp to silence so UI can recover.
-        if isLuminaLike {
-                // Lumina raw feed tends to hover between -65 and -48 even when "quiet".
-                // Treat that whole mid band as idle unless it's clearly above -40 (i.e. real signal).
-            if l > -70 && l < -40 {
-                l = -120
-            }
-            if r > -70 && r < -40 {
-                r = -120
-            }
-        } else if isContinuityIPhone {
+        if isContinuityIPhone {
             let stuckBandMin: Float = -60
             let stuckBandMax: Float = -40
             let smallDelta: Float = 1.0
@@ -1123,13 +1276,22 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             } else {
                 smoothedRight = fallSmoothing * r + (1 - fallSmoothing) * smoothedRight
             }
-        } else if name.contains("ak4571") || name.contains("iphone") || name.contains("microphone") {
+        } else if name.contains("ak4571") ||
+                    name.contains("iphone") ||
+                    name.contains("microphone") ||
+                    name.contains("airpods") ||
+                    name.contains("beats") ||
+                    name.contains("usb") ||
+                    name.contains("interface") ||
+                    name.contains("display") ||
+                    name.contains("ultrafine") {
+                // “Real” mic / interface path: minimal smoothing so the meter tracks the signal closely.
             smoothedLeft = l
             smoothedRight = r
-        } else if name.contains("display") || name.contains("ultrafine") {
-                // display / LG mics: fast rise, much faster fall so the meter doesn't stick
+        } else if (name.contains("display") || name.contains("ultrafine")) && !treatDisplayLikeRealMic {
+                // (currently disabled by treatDisplayLikeRealMic) – legacy display-specific smoothing kept for future tuning.
             let rise: Float = 0.45
-            let fall: Float = 0.70   // was 0.40 — bigger fall makes the needle relax quicker
+            let fall: Float = 0.70
             if l > smoothedLeft {
                 smoothedLeft = rise * l + (1 - rise) * smoothedLeft
             } else {
@@ -1158,8 +1320,60 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         lastFrameWasGated = gatedThisFrame
         isGatedSubject.send(gatedThisFrame)
         
+            // --- Signal health tracking ---
+            // Track how many frames we have seen and the maximum level so far; if we never
+            // see anything above a very low threshold after a short window, emit a warning
+        let levelForHealth = max(smoothedLeft, smoothedRight)
+        framesObserved += 1
+        maxLevelObserved = max(maxLevelObserved, levelForHealth)
+        let framesBeforeCheck = 50  // tune based on tap cadence (~0.5s worth of frames)
+        if framesObserved == framesBeforeCheck {
+                // For Bluetooth headsets, the OS can legitimately be silent for a few seconds
+                // while the SCO/HFP path comes online. Don't treat that initial window as failure
+                // until we've actually seen at least one non-silent frame.
+            if isBluetoothHeadset && !hasSeenNonSilentFrameForCurrentEngine {
+                    // Skip health-based retries for the initial bring-up silence on Bluetooth.
+            } else {
+                if maxLevelObserved < -80 {
+                    let warning = "Very low signal from \(selectedDevice.name). Check mic selection, gain, or distance."
+                    signalWarningSubject.send(warning)
+                    if engine.isRunning {
+                        self.scheduleTapRetry(reason: "very low signal after device change")
+                    }
+                } else {
+                    signalWarningSubject.send(nil)
+                }
+            }
+        }
+            // Flat, low-level watchdog: some devices can fall into a "zombie" state where they
+            // report a constant, very low-level noise floor without carrying real signal. Detect
+            // this by watching for many consecutive frames where the level barely changes.
+        let watchFlatLevels = !(isContinuityIPhone || isDisplayOrUltrafine || (isBluetoothHeadset && !hasSeenNonSilentFrameForCurrentEngine))
+        if watchFlatLevels {
+            let curLevel = levelForHealth
+            if abs(curLevel - flatLevelLastValue) < flatLevelTolerance {
+                flatLevelFrameCount += 1
+            } else {
+                flatLevelFrameCount = 0
+            }
+            flatLevelLastValue = curLevel
+                // Only treat this as a failure if the flat signal is well below any reasonable speech level.
+            if flatLevelFrameCount >= flatLevelFrameThreshold && curLevel < -60 {
+                logger.warning("🩺 Flat, low-level signal detected from \(self.selectedDevice.name) – reinstalling tap")
+                flatLevelFrameCount = 0
+                if engine.isRunning {
+                    self.scheduleTapRetry(reason: "flat low-level signal (possible stuck path)")
+                }
+            }
+        } else {
+                // For devices we explicitly handle elsewhere (Lumina/camera, Continuity iPhone,
+                // AirPods, display mics), don't accumulate flat-level state.
+            flatLevelFrameCount = 0
+            flatLevelLastValue = levelForHealth
+        }
+        
             // Arm displayActivityCooldown only on real motion or moderately loud audio for display/UltraFine mics
-        if lowerName.contains("display") || lowerName.contains("ultrafine") {
+        if (lowerName.contains("display") || lowerName.contains("ultrafine")) && !treatDisplayLikeRealMic {
             let burstL = l > smoothedLeft + 2.5
             let burstR = r > smoothedRight + 2.5
             let loudL = l > -45
@@ -1170,9 +1384,22 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
         }
         
             // Device-aware silence watchdog: iPhone/Continuity tends to come up silent, so retry sooner.
-            // Lumina/camera-like devices can show a constant floor, so don't hammer the tap for them.
-        let watchSilence = !(isLuminaLike || isContinuityIPhone || isDisplayOrUltrafine)
-        if l <= -119 && r <= -119 {
+            // For silence recovery, we still want to auto-heal Lumina / camera and display / LG paths.
+            // For Bluetooth headsets (AirPods / Beats), *only* enable silence-based auto-healing
+            // after we've actually seen at least one non-silent frame on the current engine.
+            // That way we ignore the initial HFP/SCO bring-up silence, but still heal "zombie" paths later.
+        var watchSilence = !(isContinuityIPhone || isDisplayOrUltrafine)
+        
+        if isBluetoothHeadset && !hasSeenNonSilentFrameForCurrentEngine {
+                // Still in the initial bring-up window: ignore silence for generic tap retries,
+                // but we may still decide to fall back if the engine stays digitally silent.
+            watchSilence = false
+        }
+        
+            // Use the original (pre-gated) levels for detecting true digital silence
+        let rawSilent = (originalL <= -119 && originalR <= -119)
+        
+        if rawSilent {
             if watchSilence {
                 silentCount += 1
                 let maxSilentFrames = isContinuityIPhone ? 6 : 20
@@ -1180,13 +1407,84 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                     logger.warning("🛑 Silent input detected (\(lowerName)).")
                     scheduleTapRetry(reason: "\(lowerName) sustained silence")
                 }
+                    // Global dead-silence detector: for "real" inputs (built-in, interfaces, etc.) we want to
+                    // auto-recover if we see sustained digital silence that likely indicates a stuck HAL path.
+                deadSilenceFrameCount += 1
+                if deadSilenceFrameCount >= deadSilenceFrameThreshold {
+                    attemptSilenceRecoveryIfNeeded()
+                }
+            }
+            
+                // Special-case Bluetooth: if the engine has been running for a while and we've *never*
+                // seen a non-silent frame, treat this as a stuck path and fall back to a non-Bluetooth input.
+            if (isBluetoothHeadset || isContinuityIPhone),
+               !hasSeenNonSilentFrameForCurrentEngine,
+               !didAttemptBluetoothFallbackForCurrentEngine {
+                
+                let elapsed: TimeInterval
+                if let startedAt = engineStartedAt {
+                    elapsed = Date().timeIntervalSince(startedAt)
+                } else {
+                    elapsed = 0
+                }
+                
+                    // Fallback after a short real-time window of pure digital silence
+                if elapsed >= bluetoothSilenceFallbackSeconds {
+                    didAttemptBluetoothFallbackForCurrentEngine = true
+                    logger.warning("🎧 Input \(self.selectedDevice.name) remained fully silent for \(self.framesSinceEngineStart) frames (~\(String(format: "%.2f", elapsed))s) — attempting fallback")
+                    fallbackFromBluetoothSilence()
+                }
             }
         } else {
             silentCount = 0
+            deadSilenceFrameCount = 0
             tapRetryCount = 0
             pendingTapRetry?.cancel(); pendingTapRetry = nil
         }
+        
         framesSinceEngineStart += 1
+    }
+    
+    
+    private func fallbackFromBluetoothSilence() {
+        let lowerName = selectedDevice.name.lowercased()
+        let isAirPods = lowerName.contains("airpods")
+        let isBeats = lowerName.contains("beats")
+        let isBluetoothHeadset = isAirPods || isBeats
+        let isContinuityIPhone = lowerName.contains("iphone")
+            // We allow this fallback for both Bluetooth headsets and Continuity-style iPhone mics
+        guard isBluetoothHeadset || isContinuityIPhone else { return }
+        
+#if os(macOS)
+            // Try to find a reasonable non-Bluetooth, non-display, non-continuity input to fall back to.
+            // Prefer "real" mics/interfaces (USB, AK4571, built-in) over iPhone/camera-style devices.
+        let devices = inputDevices
+        
+        let primaryCandidates = devices.filter { dev in
+            let n = dev.name.lowercased()
+            let isBT = n.contains("airpods") || n.contains("beats")
+            let isDisplay = n.contains("display") || n.contains("ultrafine")
+            let isContinuity = n.contains("iphone") || n.contains("camera") || n.contains("lumina")
+            return !isBT && !isDisplay && !isContinuity
+        }
+        
+        let secondaryCandidates = devices.filter { dev in
+            let n = dev.name.lowercased()
+            let isBT = n.contains("airpods") || n.contains("beats")
+            let isDisplay = n.contains("display") || n.contains("ultrafine")
+            return !isBT && !isDisplay
+        }
+        
+        guard let fallback = primaryCandidates.first ?? secondaryCandidates.first else {
+            logger.warning("🎧 Wanted to fall back from \(self.selectedDevice.name) but no suitable non‑Bluetooth device was found")
+            return
+        }
+        
+        logger.info("🎧 Falling back from input \(self.selectedDevice.name) to \(fallback.name) due to sustained digital silence")
+            // Mark this as an explicit user-like choice so we stop auto-following system default
+        self.userPinnedSelection = true
+        self.selectDevice(fallback)
+#endif
     }
     
     
@@ -1198,54 +1496,63 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             logger.warning("🔒 Mic permission not granted — skipping device refresh")
             return
         }
+        
+            // If HAL just reported a device-level error (e.g. -10877), temporarily
+            // back off from further enumeration so the plugin can recover.
+        if let backoff = halBackoffUntil, backoff > Date() {
+            logger.warning("⏸️ HAL backoff active until \(backoff) — skipping device refresh")
+            return
+        }
+        
         let devices = enumerateInputDevices()
         inputDevicesSubject.send(devices)
-        
+        processPendingSystemDefaultIfNeeded(devices: devices)
         if let grace = inputAutoSelectGraceUntil, grace > Date() {
-            logger.info("⏱️ Skipping auto-select (within grace window after system change)")
-            return
-        }
-        
-            // Selection policy (race-safe): normalize current selection; treat placeholder (.none or id==0) as no selection
-        let current = self.selectedDevice
-        let selID = current.id
-        
-            // No devices at all → publish and retry soon, but DO NOT clear current selection (prevents placeholder churn)
-        guard devices.isEmpty == false else {
-            logger.error("❌ No devices fetched.")
-                // keep current selection; schedule a retry since HAL can race during route changes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.refreshInputDevices()
+                // Selection policy (race-safe): normalize current selection; treat placeholder (.none or id==0) as no selection
+            let current = self.selectedDevice
+            let selID = current.id
+            
+                // No devices at all → publish and retry soon, but DO NOT clear current selection (prevents placeholder churn)
+            guard devices.isEmpty == false else {
+                logger.error("❌ No devices fetched.")
+                    // keep current selection; schedule a retry since HAL can race during route changes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.refreshInputDevices()
+                }
+                return
             }
-            return
-        }
-        
-        if selID == 0 { // placeholder / none
-            logger.warning("⚠️ Selected device is placeholder — adopting system default or first available")
-            if let def = systemDefaultInputDevice(), devices.first(where: { $0.id == def.id }) != nil {
-                self.selectedDevice = def
-                self.selectedInputDeviceSubject.send(def)
-                logger.info("🎯 Using system default input for UI: \(def.name) [id: \(def.id)]")
-            } else if let first = devices.first {
-                self.selectedDevice = first
-                self.selectedInputDeviceSubject.send(first)
-                logger.info("🎯 Using first enumerated input for UI: \(first.name) [id: \(first.id)]")
-            }
-        } else if devices.first(where: { $0.id == selID }) != nil {
-                // Keep current if still present
-            logger.debug("🔎 Selection still valid: \(current.name) [id: \(selID)]")
-        } else {
-                // Current disappeared → adopt system default if present, else first
-            if let def = systemDefaultInputDevice(), devices.first(where: { $0.id == def.id }) != nil {
-                self.selectedDevice = def
-                self.selectedInputDeviceSubject.send(def)
-                logger.info("🎯 Adopted system default (replacement): \(def.name) [id: \(def.id)]")
-            } else if let first = devices.first {
-                self.selectedDevice = first
-                self.selectedInputDeviceSubject.send(first)
-                logger.info("🎯 Adopted first device (replacement): \(first.name) [id: \(first.id)]")
+            
+            if selID == 0 { // placeholder / none
+                logger.warning("⚠️ Selected device is placeholder — adopting system default or first available")
+                if let def = systemDefaultInputDevice(), devices.first(where: { $0.id == def.id }) != nil {
+                    self.selectedDevice = def
+                    self.selectedInputDeviceSubject.send(def)
+                    self.userPinnedSelection = false
+                    logger.info("🎯 Using system default input for UI: \(def.name) [id: \(def.id)]")
+                } else if let first = devices.first {
+                    self.selectedDevice = first
+                    self.selectedInputDeviceSubject.send(first)
+                    self.userPinnedSelection = false
+                    logger.info("🎯 Using first enumerated input for UI: \(first.name) [id: \(first.id)]")
+                }
+            } else if devices.first(where: { $0.id == selID }) != nil {
+                    // Keep current if still present
+                logger.debug("🔎 Selection still valid: \(current.name) [id: \(selID)]")
             } else {
-                logger.error("❌ No valid input device found for selection.")
+                    // Current disappeared → adopt system default if present, else first
+                if let def = systemDefaultInputDevice(), devices.first(where: { $0.id == def.id }) != nil {
+                    self.selectedDevice = def
+                    self.selectedInputDeviceSubject.send(def)
+                    self.userPinnedSelection = false
+                    logger.info("🎯 Adopted system default (replacement): \(def.name) [id: \(def.id)]")
+                } else if let first = devices.first {
+                    self.selectedDevice = first
+                    self.selectedInputDeviceSubject.send(first)
+                    self.userPinnedSelection = false
+                    logger.info("🎯 Adopted first device (replacement): \(first.name) [id: \(first.id)]")
+                } else {
+                    logger.error("❌ No valid input device found for selection.")
+                }
             }
         }
 #else
@@ -1254,7 +1561,87 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
 #endif
     }
     
+        // Helper to process deferred Bluetooth system default adoption
 #if os(macOS)
+    private func processPendingSystemDefaultIfNeeded(devices: [InputAudioDevice]) {
+        guard let pending = pendingSystemDefaultInput else {
+            logger.debug("🎧 processPendingSystemDefaultIfNeeded: no pending system default")
+            return
+        }
+        guard let changedAt = lastSystemInputChangeAt else {
+            logger.debug("🎧 processPendingSystemDefaultIfNeeded: missing lastSystemInputChangeAt, clearing pending")
+            pendingSystemDefaultInput = nil
+            lastSystemInputChangeAt = nil
+            return
+        }
+        
+        let age = Date().timeIntervalSince(changedAt)
+        logger.debug("🎧 processPendingSystemDefaultIfNeeded: pending=\(pending.name) age=\(String(format: "%.2f", age))s devices.count=\(devices.count)")
+        
+            // Wait for a short delay so the Bluetooth input path can fully come online
+        if Date().timeIntervalSince(changedAt) < bluetoothAdoptionDelay {
+            return
+        }
+            // Ensure the pending device is still present in the current device list. If it's not
+            // there yet, keep waiting for a short timeout so we don't race HAL while the Bluetooth
+            // route is still coming online.
+        if devices.first(where: { $0.id == pending.id }) == nil {
+            let age = Date().timeIntervalSince(changedAt)
+            if age < bluetoothAdoptionTimeout {
+                logger.debug("🎧 Deferred Bluetooth default \(pending.name) not yet present in device list (age=\(String(format: "%.2f", age))s) – keeping pending")
+                return
+            } else {
+                logger.info("🎧 Deferred Bluetooth default \(pending.name) still missing after \(String(format: "%.2f", age))s – clearing pending")
+                pendingSystemDefaultInput = nil
+                lastSystemInputChangeAt = nil
+                return
+            }
+        }
+            // Do not override an explicit user selection that happened after the system change
+        guard !userPinnedSelection else {
+            logger.info("🎧 Deferred Bluetooth default \(pending.name) ignored – user pinned \(self.selectedDevice.name)")
+            pendingSystemDefaultInput = nil
+            lastSystemInputChangeAt = nil
+            return
+        }
+        logger.info("🎧 Adopting deferred Bluetooth system default input: \(pending.name) [id: \(pending.id)]")
+        selectedDevice = pending
+        selectedInputDeviceSubject.send(pending)
+        userPinnedSelection = false
+            // Reset per-engine health tracking for the newly adopted Bluetooth device
+        resetSignalHealth()
+        hasSeenNonSilentFrameForCurrentEngine = false
+        didAttemptBluetoothFallbackForCurrentEngine = false
+        silentCount = 0
+        deadSilenceFrameCount = 0
+            // Reset adaptive noise floor for the new system-selected device
+        learnedNoiseFloor = -120
+        learnedNoiseFloorSamples = 0
+        noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
+            // Give auto-select a brief grace window and reset tap retry state
+        inputAutoSelectGraceUntil = Date().addingTimeInterval(1.0)
+        pendingTapRetry?.cancel(); pendingTapRetry = nil
+        tapRetryCount = 0
+            // Retarget engine/tap to the newly adopted device
+        verifyMicPermissionThen { [weak self] in
+            guard let self = self else { return }
+            if self.engine.isRunning { self.engine.stop() }
+            if self.tapInstalled {
+                self.engine.inputNode.removeTap(onBus: 0)
+                self.tapInstalled = false
+            }
+            if !self.isStarting { self.startEngine() }
+        }
+        pendingSystemDefaultInput = nil
+        lastSystemInputChangeAt = nil
+    }
+#endif
+    
+    
+#if os(macOS)
+        /// When HAL/CoreAudio returns a device error (e.g. -10877), temporarily back off
+        /// from device enumeration and route changes so the HAL plugin can recover.
+    private var halBackoffUntil: Date?
     private func enumerateInputDevices() -> [InputAudioDevice] {
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
@@ -1262,10 +1649,27 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             mElement: kAudioObjectPropertyElementMain
         )
         var dataSize: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &dataSize) == noErr else { return [] }
+        let statusSize = AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &dataSize)
+        guard statusSize == noErr else {
+            logger.error("❌ HAL device list size query failed, status=\(statusSize)")
+            if statusSize == -10877 {
+                halBackoffUntil = Date().addingTimeInterval(1.5)
+                logger.warning("⏸️ Entering HAL backoff for 1.5s due to HALDeviceError (-10877) [size]")
+            }
+            return []
+        }
+        
         let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
         var ids = [AudioObjectID](repeating: 0, count: count)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &dataSize, &ids) == noErr else { return [] }
+        let statusData = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &dataSize, &ids)
+        guard statusData == noErr else {
+            logger.error("❌ HAL device list fetch failed, status=\(statusData)")
+            if statusData == -10877 {
+                halBackoffUntil = Date().addingTimeInterval(1.5)
+                logger.warning("⏸️ Entering HAL backoff for 1.5s due to HALDeviceError (-10877) [data]")
+            }
+            return []
+        }
         
         func inputChannelCount(_ id: AudioObjectID) -> UInt32 {
             var streamAddr = AudioObjectPropertyAddress(
@@ -1274,10 +1678,26 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                 mElement: kAudioObjectPropertyElementMain
             )
             var size: UInt32 = 0
-            guard AudioObjectGetPropertyDataSize(id, &streamAddr, 0, nil, &size) == noErr, size > 0 else { return 0 }
+            let stSize = AudioObjectGetPropertyDataSize(id, &streamAddr, 0, nil, &size)
+            guard stSize == noErr, size > 0 else {
+                if stSize == -10877 {
+                    halBackoffUntil = Date().addingTimeInterval(1.5)
+                    logger.warning("⏸️ Entering HAL backoff for 1.5s (stream config size) on id=\(id)")
+                }
+                return 0
+            }
+            
             let buf = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<Int8>.alignment)
             defer { buf.deallocate() }
-            guard AudioObjectGetPropertyData(id, &streamAddr, 0, nil, &size, buf) == noErr else { return 0 }
+            let stData = AudioObjectGetPropertyData(id, &streamAddr, 0, nil, &size, buf)
+            guard stData == noErr else {
+                if stData == -10877 {
+                    halBackoffUntil = Date().addingTimeInterval(1.5)
+                    logger.warning("⏸️ Entering HAL backoff for 1.5s (stream config data) on id=\(id)")
+                }
+                return 0
+            }
+            
             let abl = buf.bindMemory(to: AudioBufferList.self, capacity: 1).pointee
             var total: UInt32 = 0
             for i in 0..<Int(abl.mNumberBuffers) {
@@ -1299,10 +1719,26 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                 mElement: kAudioObjectPropertyElementMain
             )
             var nameSize: UInt32 = 0
-            guard AudioObjectGetPropertyDataSize(id, &nameAddr, 0, nil, &nameSize) == noErr else { return "Audio Device" }
+            let stNameSize = AudioObjectGetPropertyDataSize(id, &nameAddr, 0, nil, &nameSize)
+            guard stNameSize == noErr else {
+                if stNameSize == -10877 {
+                    halBackoffUntil = Date().addingTimeInterval(1.5)
+                    logger.warning("⏸️ Entering HAL backoff for 1.5s (device name size) on id=\(id)")
+                }
+                return "Audio Device"
+            }
+            
             let ptr = UnsafeMutableRawPointer.allocate(byteCount: Int(nameSize), alignment: MemoryLayout<Int8>.alignment)
             defer { ptr.deallocate() }
-            guard AudioObjectGetPropertyData(id, &nameAddr, 0, nil, &nameSize, ptr) == noErr else { return "Audio Device" }
+            let stNameData = AudioObjectGetPropertyData(id, &nameAddr, 0, nil, &nameSize, ptr)
+            guard stNameData == noErr else {
+                if stNameData == -10877 {
+                    halBackoffUntil = Date().addingTimeInterval(1.5)
+                    logger.warning("⏸️ Entering HAL backoff for 1.5s (device name data) on id=\(id)")
+                }
+                return "Audio Device"
+            }
+            
             return (ptr.bindMemory(to: CFString.self, capacity: 1).pointee as String)
         }
         
@@ -1347,9 +1783,8 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             guard let self = self else { return }
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                self.refreshInputDevices()
                 guard let def = self.systemDefaultInputDevice() else { return }
-#if os(macOS)
+                
                 if self.forceSystemDefaultToSelected,
                    self.selectedDevice.id != 0 {
                     if def.id != self.selectedDevice.id {
@@ -1360,18 +1795,93 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
                         // Either way, when forcing, do not adopt the external default.
                     return
                 }
-#endif
-                    // Not forcing: adopt the new system default
+                    // Not forcing: only adopt the new system default automatically if we currently
+                    // have no real selection (placeholder / none). If the user has already
+                    // selected a device, keep that selection and just log the system change.
+                if self.userPinnedSelection {
+                    self.logger.info("🔔 System default input changed → keeping user-selected input: \(self.selectedDevice.name) [id: \(self.selectedDevice.id)] (new system default is \(def.name) [id: \(def.id)])")
+                    return
+                }
+                let lowerName = def.name.lowercased()
+                let isAirPods = lowerName.contains("airpods")
+                let isBeats = lowerName.contains("beats")
+                let isBluetoothHeadset = isAirPods || isBeats
+                
+                    // For Bluetooth headsets (AirPods / Beats), adopt the new system default
+                    // immediately at the app level, but quiesce the engine and delay the actual
+                    // engine restart so the SCO/HFP path can fully come online.
+                if isBluetoothHeadset {
+                        // Mark that a Bluetooth route change is in progress so other auto-healing
+                        // logic (engine restarts, tap retries) stands down.
+                    self.pendingSystemDefaultInput = def
+                    self.lastSystemInputChangeAt = Date()
+                    self.inputAutoSelectGraceUntil = Date().addingTimeInterval(self.bluetoothAdoptionDelay)
+                    
+                        // Adopt the new default as our current selection (no user pin)
+                    self.selectedDevice = def
+                    self.selectedInputDeviceSubject.send(def)
+                    self.userPinnedSelection = false
+                    
+                    self.logger.info("🔔 System default input changed → adopting Bluetooth default \(def.name) [id: \(def.id)] and quiescing engine during route change")
+                    
+                        // Quiesce the current engine/tap so we’re not driving the old device
+                        // while CoreAudio tears it down.
+                    if self.engine.isRunning {
+                        self.engine.stop()
+                    }
+                    if self.tapInstalled {
+                        self.engine.inputNode.removeTap(onBus: 0)
+                        self.tapInstalled = false
+                    }
+                    
+                        // Reset per-engine / per-device state for the upcoming Bluetooth engine
+                    self.resetSignalHealth()
+                    self.hasSeenNonSilentFrameForCurrentEngine = false
+                    self.didAttemptBluetoothFallbackForCurrentEngine = false
+                    self.silentCount = 0
+                    self.deadSilenceFrameCount = 0
+                    
+                        // Reset adaptive noise floor and tap retry state
+                    self.learnedNoiseFloor = -120
+                    self.learnedNoiseFloorSamples = 0
+                    self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
+                    self.pendingTapRetry?.cancel()
+                    self.pendingTapRetry = nil
+                    self.tapRetryCount = 0
+                    
+                        // After a short delay (bluetoothAdoptionDelay), restart the engine on
+                        // the new Bluetooth route.
+                    let delay = self.bluetoothAdoptionDelay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                        guard let self = self else { return }
+                        self.verifyMicPermissionThen { [weak self] in
+                            guard let self = self else { return }
+                            if self.engine.isRunning { self.engine.stop() }
+                            if self.tapInstalled {
+                                self.engine.inputNode.removeTap(onBus: 0)
+                                self.tapInstalled = false
+                            }
+                            if !self.isStarting { self.startEngine() }
+                            
+                                // Route change complete – clear the pending flag so other
+                                // watchdogs can resume normal behavior.
+                            self.pendingSystemDefaultInput = nil
+                            self.lastSystemInputChangeAt = nil
+                        }
+                    }
+                    
+                    return
+                }
+                    // No explicit user selection yet and not forcing: follow the new system default immediately
                 self.selectedDevice = def
                 self.selectedInputDeviceSubject.send(def)
-                self.logger.info("🔔 System default input changed → adopting: \(def.name) [id: \(def.id)]")
+                self.userPinnedSelection = false
+                self.logger.info("🔔 System default input changed → adopting system default (no pinned selection): \(def.name) [id: \(def.id)]")
                 
                     // reset adaptive noise floor for the new system-selected device
                 self.learnedNoiseFloor = -120
                 self.learnedNoiseFloorSamples = 0
                 self.noiseFloorLearnNotBefore = Date().addingTimeInterval(1.0)
-                
-                
                 
                 self.inputAutoSelectGraceUntil = Date().addingTimeInterval(1.0)
                     // Restart engine permission‑aware to retarget input node and reinstall the tap
@@ -1486,6 +1996,7 @@ public final class AudioManager: ObservableObject, AudioManagerProtocol {
             logger.error("❌ Failed to set default input to \(safeName) [id: \(safeId)], status=\(status)")
         }
     }
+    
 #endif
     
 }
