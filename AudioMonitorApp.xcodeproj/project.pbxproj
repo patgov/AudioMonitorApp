@@ -34,8 +34,8 @@
 		3D5B75972DF0C4BC0091EDEA /* Exceptions for "AudioMonitorApp" folder in "AudioMonitorApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"Documents/AudioMonitorApp structure.md",
 				Info.plist,
-				"Readme/AudioMonitorApp structure.md",
 			);
 			target = 3D69EBE52D9970800056F87C /* AudioMonitorApp */;
 		};

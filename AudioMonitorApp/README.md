@@ -1,83 +1,189 @@
-#  AudioMonitorApp
+# AudioMonitorApp  
+A professional‑grade real‑time audio input monitor built for **macOS 16 (26.x)** using **Swift 6.2**, th latest Swift Concurrency model, and SwiftUI.  
 
-    Develop an audio monitoring application with volume controls for Mac OS 15.3 and iPad 18.3. Utilize Swift 6.0, SwiftUI, and SwiftData for the development. The audio monitoring should provide professional stereo quality and volume indicators resembling professional VU meters with a needle indicating the audio level from 0 dB to 100 dB. Additionally, it should display overmodulation levels in red, similar to audio meters found in audio equipment from the 1970s. A desktop widget should be included to periodically display the stereo audio levels, allowing users to monitor the current audio levels and issue warnings for potential audio issues, such as silence or excessive volume
+AudioMonitorApp is engineered to handle complex CoreAudio & HAL behavior, high‑precision metering, and unstable Bluetooth audio routes (AirPods, Beats) — all while maintaining accurate, stable, low‑latency audio monitoring.
 
-Would you like this turned into a **feature sheet**, a **README** section, or a **launch press note**? 
+## ✨ Features
 
-**Generate an issue tracker from this.**
+### 🎚️ Accurate, Professional VU Metering
+- Real‑time **dBFS** measurement (L/R)  
+- Analog‑style ballistic behavior (fast attack / slow release)  
+- Needle‑like response curve modeled after 1970s hardware  
+- Stereo processing (or mono if device reports it)  
+- Overmodulation detection (clip indicator shown in red)  
+- Silence detection & noise‑floor learning  
+- –120 dBFS safety floor for unstable devices (Bluetooth warm‑up)
 
-	•	AudioManager.swift (handles input device selection and audio callback)
-	•	AudioMonitorView.swift (main SwiftUI UI with VU meter and stats)
-	•	LogWriter.swift (logs events to a file)
-	•	AdvancedLogViewerView.swift (displays logs in the UI)
-	•	App entry point (e.g. AudioMonitorApp.swift)
+### 🎧 Advanced Input Device Management
 
-AudioProcessor.swift
-Changes
+Powered by a custom **AudioManager** built on AVAudioEngine + CoreAudio HAL:
 
-• real-time dB level processing,
-• smoothing,
-• stereo channel support,
-• silence/overmodulation detection,
-• logging
-
-MVVM Model
-
-Adopting MVVM will help keep your logic modular and isolate changes to stats or logs from the core audio monitoring functionality. 
-	1.	Separating concerns:
-	•	Model: AudioProcessor, LogEntry, AudioStats, etc.
-	•	ViewModel: AudioMonitorViewModel, which will handle coordination between audio input and stats/log updates.
-	•	View: AudioMonitorView, AdvancedLogViewerView, AudioStatsView.
-	2.	Isolating Audio Input:
-	•	Keep AudioManager strictly responsible for managing AVAudioEngine and audio input.
-	3.	Making LogManager and StatsManager pure observers or recorders:
-	•	Trigger them from AudioMonitorViewModel so changes don’t directly couple to the view or engine.
-
-🧱 MVVM Breakdown for Your App
-
-Model
-	•	AudioStats, LogEntry, and LogManager: Contain the data structures and logic for tracking and storing stats/logs.
-	•	Could include small helpers like AudioDeviceInfo.
-
-ViewModel
-	•	AudioMonitorViewModel:
-	•	Owns the AudioManager (encapsulating audio input + processing).
-	•	Exposes bindings (@Published properties) for VU levels, status, selected device.
-	•	Can also pass log/stat data downstream to logging/viewing modules.
-
-View
-	•	AudioMonitorView (now just displays data via the ViewModel).
-	•	AdvancedLogViewerView, AudioStatsView — connected to ViewModel or to their own ViewModels.
-
-✅ Advantages
-	•	Your audio engine logic lives in the ViewModel and won’t be disrupted when the UI changes.
-	•	Logging/stats can operate independently from audio monitoring.
-	•	Easier to test, debug, and extend — e.g. add system audio monitoring later.
- 
- ✅ Advantages
-	•	Your audio engine logic lives in the ViewModel and won’t be disrupted when the UI changes.
-	•	Logging/stats can operate independently from audio monitoring.
-	•	Easier to test, debug, and extend — e.g. add system audio monitoring later.
- 
-    
- Start by refactoring the audio input to a clean AudioViewModel, then integrating logging and stats into their own models or services.
+- Live monitoring of **system default input**  
+- Grace windows preventing rapid reconfiguration  
+- Intelligent **Bluetooth warm‑up** (200–600 ms buffering)  
+- Recovery from HAL failures:
+  - `!obj`
+  - `!dev`
+  - `-10877` (AudioUnit render warning)
+  - `TooManyFramesToProcess`
+- Fully clean teardown and safe engine restarts  
+- Removes taps before installing new ones  
+- Learns per‑device noise floors  
 
 
-✅ Pass the type LogManager instead of an instance of it into the initializer.
-	• Cannot convert value of type 'LogManager.Type' to expected argument type 'LogManager' (It means the type itself is being passed (a blueprint) rather than an instance (an actual object created from that blueprint)
-    
-    let logManager = LogManager(audioManager: someAudioManager)
-    let audioManager = AudioManager(processor: processor, logManager: logManager)
-    
-    ❌  let audioManager = AudioManager(processor: processor, logManager: LogManager)
-    // This passes the type (LogManager.self), not an instance
+### 🩺 Diagnostics & Logging
 
-    Handing off the blueprint for a house instead of a real house to live in.
-    
-    💡 How to Fix It
+Includes a full in‑app diagnostics suite:
 
-    If a function or initializer expects an instance of a class (like LogManager), make sure you’re calling its initializer:
-    LogManager(audioManager: someAudioManager)  // This creates an instance
-    
-    But writing LogManager by itself, Swift interprets that as referring to the type — not an instance — hence the error.
-    
+- Real‑time log stream  
+- Device‑change timeline  
+- State machine transitions  
+- AVAudioEngine event visibility  
+- HAL error codes surfaced clearly  
+- Bluetooth warm‑up tracking  
+- Per‑frame AudioStats  
+- Searchable, scrollable **AdvancedLogViewerView**
+
+
+### 📊 Real-Time Audio Processing (AudioProcessor.swift)
+
+- dBFS computation per channel  
+- Attack/release smoothing  
+- Zero‑crossing peak verification  
+- Adaptive noise‑floor logic  
+- Silence & clipping detection  
+- Bluetooth stabilization mode  
+- Safety clamp at **–120 dBFS** when device is unstable
+
+
+### ⚡ Modern Swift Concurrency (Swift 6.2)
+
+This project is fully updated for the new Swift 6.2 requirements:
+
+- Strict **Sendable** enforcement  
+- Isolation domains (MainActor, audio thread isolation)  
+- Async device polling  
+- Actor‑safe logging system  
+- Nonisolated audio callback paths  
+- Avoids undefined behavior across threads
+
+
+## 🧱 Architecture Overview (MVVM + Audio Layer)
+
+### **Model**
+- `AudioStats`  
+- `AudioDeviceInfo`  
+- `LogEntry`  
+- `AudioProcessor`  
+- `LogManager`  
+
+### **ViewModel**
+- `AudioMonitorViewModel`
+  - Owns `AudioManager`
+  - Publishes device list & active device
+  - Publishes VU levels
+  - Coordinates logging, stabilization, warm‑up
+  - Provides UI‑ready state
+
+### **View**
+- `AudioMonitorView`
+- `AdvancedLogViewerView`
+- `AudioStatsView`
+- (Future) macOS Widget
+
+## 🎧 How Audio Input Works
+
+### 1. AVAudioEngine Input Tap
+The engine pulls PCM buffers → AudioProcessor computes real‑time levels.
+
+### 2. Device Switching Pipeline
+When macOS changes the **default input**:
+
+1. Detect CoreAudio notification  
+2. Freeze UI selection unless user pinned a device  
+3. Apply grace‑window (200–600 ms)  
+4. Quiesce engine  
+5. Remove tap  
+6. Install new tap  
+7. Begin noise‑floor learning  
+8. Resume monitoring
+
+Bluetooth devices get an extended warm‑up window.
+
+### 3. HAL Error Recovery
+
+The app catches and survives:
+
+| Error | Meaning |
+|-------|---------|
+| `!obj` | HAL object vanished mid‑transaction |
+| `!dev` | Device disappeared while IOProc active |
+| `-10877` | Render callback produced invalid audio |
+| `TooManyFramesToProcess` | Engine forced into oversized render cycle |
+
+Engine is restarted safely, with structured logging.
+
+### 4. Adaptive Noise Floor Learning
+Noise floor is learned during first valid frames.  
+Until stable: all frames are forced to **–120 dBFS**.
+
+
+## 🧪 Debugging Tools
+
+### Inline Live Log Viewer
+Displays:
+
+- systemDefaultInput events  
+- HAL warnings  
+- Audio engine restarts  
+- Bluetooth device warm‑up timeline  
+- Tap failures  
+- Per‑frame statistical summaries  
+
+### Persistent Logs
+Saved automatically for later review.
+
+
+## 📦 Project Structure
+
+```
+AudioMonitorApp/
+ ├── AudioManager.swift
+ ├── AudioProcessor.swift
+ ├── AudioMonitorViewModel.swift
+ ├── LogManager.swift
+ ├── LogWriter.swift
+ ├── AudioMonitorView.swift
+ ├── AdvancedLogViewerView.swift
+ ├── AudioStatsView.swift
+ ├── AudioMonitorApp.swift
+ └── README.md
+```
+
+
+## 🛠 Build Requirements
+- **macOS 16 (26.x)**  
+- **Xcode 16+**  
+- **Swift 6.2**  
+- SwiftUI  
+- Microphone permission  
+
+
+## 🚀 Roadmap
+- macOS widget (live dBFS meter)  
+- Historical graphing + export  
+- LUFS/RMS DSP modes  
+- Log export  
+- Test suite for DSP & AudioManager  
+
+
+## 📄 License
+MIT (customize if needed)
+
+
+## 🤝 Contributions
+Open to PRs and issues.
+
+
+## 🧡 About This Project
+AudioMonitorApp is built as a **professional diagnostic tool** for engineers, musicians, podcasters, and developers who need transparent and reliable insight into the macOS CoreAudio input pipeline.

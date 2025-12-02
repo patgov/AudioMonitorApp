@@ -1,8 +1,0 @@
-| Commit                                                  | Description                                                                                                                                                     |
-|:--------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Apply @MainActor to AudioManager and ViewModel          | Marked AudioManager, AudioMonitorViewModel, and Diagnostics classes with @MainActor to enforce main-thread access.                                              |
-| Wrap audio tap callback in MainActor.run                | Wrapped the AVAudioEngine tap closure in Task { await MainActor.run { ... } } to fix EXC_BREAKPOINT caused by concurrency violations inside real-time callback. |
-| Fix nonisolated access to selectedDevice and stop/start | Resolved concurrency isolation errors by accessing main-actor-isolated properties using await MainActor.run blocks.                                             |
-| Conform InputAudioDevice to Hashable & Equatable        | Enabled SwiftUI Picker and comparison support by adding Hashable and Equatable to InputAudioDevice.                                                             |
-| Replace deprecated CoreAudio APIs with AudioObject APIs | Removed use of AudioHardwareGetPropertyInfo and kAudioObjectPropertyElementMaster. Updated to use kAudioObjectPropertyElementMain and AudioObject APIs.         |
-| Add nonisolated dummy/preview managers                  | Marked DummyAudioManager and PreviewSafeLogManager functions as nonisolated to prevent strict concurrency issues in test and preview code.                      |
